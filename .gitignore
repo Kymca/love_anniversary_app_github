@@ -1,0 +1,66 @@
+# Flutter and Dart build/dependency output
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+test/failures/
+**/doc/api/
+
+# Local application data
+/postcard_data/
+/result.json
+
+# Local environment and credentials
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.template
+**/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
+**/*.p8
+**/*.mobileprovision
+**/*.provisionprofile
+**/*.pem
+**/*.key
+google-services.json
+GoogleService-Info.plist
+*service*account*.json
+*firebase-adminsdk*.json
+
+# IDE and operating system files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.tmp
+*.log
+
+# Android local build state
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/local.properties
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Apple platform local build state
+**/Pods/
+**/DerivedData/
+**/xcuserdata/
+**/.symlinks/
