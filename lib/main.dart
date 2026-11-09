@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/tamagotchi_screen.dart';
 import 'screens/memories_screen.dart';
@@ -24,8 +25,12 @@ import 'widgets/random_memories_card.dart';
 
 final relationshipStartDate = DateTime(2023, 11, 13, 20, 30);
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://xbbybirzhmhlsnmvyvxa.supabase.co',
+    publishableKey: 'sb_publishable_RucfRH_JuqPwnt33Oo1uRQ_WOW4o6NS',
+  );
   const botToken = String.fromEnvironment('TELEGRAM_BOT_TOKEN');
   const chatId = String.fromEnvironment('TELEGRAM_CHAT_ID');
   runApp(
