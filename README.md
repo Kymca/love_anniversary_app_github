@@ -190,19 +190,20 @@ synced into this branch. Private `result.json`, machine-local configuration,
 and build/cache artifacts were not copied; the GitHub-only LAN postcard
 modules were preserved.
 
-The current pair, shared-mood, shared-coupon, and push client code may need
-newer Supabase backend objects than production currently has. Those pair/push
-migrations and Edge Functions are intentionally outside this updater change
-and were not applied or deployed. Before releasing the synchronized app,
-review the backend requirements separately, including migrations
-`20261114170000_allow_anonymous_pair_members`,
-`20261115100000_pair_shared_moods_and_membership_guards`,
-`20261117100000_pair_shared_coupons`, and
-`20261117130000_pair_push_notifications`, plus the
-`register-push-device` and `push-dispatch` functions. Existing production
-pairing migrations are older equivalents and should not be blindly reapplied.
-The optional pair-push registration also requires Firebase client Dart defines;
-without them, push registration remains disabled.
+Production already has the pair and shared-mood schema through older equivalent
+migrations; do not blindly reapply
+`20261114170000_allow_anonymous_pair_members` or
+`20261115100000_pair_shared_moods_and_membership_guards`. Shared coupons require
+the additive `20261117100000_pair_shared_coupons` migration, which must be
+applied before releasing this synchronized app; it creates the
+`pair_coupon_states` table and `activate_pair_coupon` function used by the
+client. This branch includes the migration, but it has not been applied to
+production.
+
+Push notifications remain optional and disabled: Firebase credentials and
+client Dart defines are not configured. Do not apply
+`20261117130000_pair_push_notifications` or deploy `register-push-device` and
+`push-dispatch` as part of this release.
 
 To integrate this updater into another app checkout, merge the updater service,
 function/config/migration and test, then make a surgical merge in that checkout's `lib/main.dart` to
