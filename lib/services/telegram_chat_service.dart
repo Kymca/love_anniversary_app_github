@@ -94,6 +94,7 @@ class TelegramChatService {
        _random = random ?? Random();
 
   static const favoritesKey = 'telegram_chat_favorites';
+  static const dailySnippetKey = 'telegram_chat_daily_snippet';
   static const negativeTriggers = <String>[
     'плачу из-за',
     'реву',
@@ -117,6 +118,84 @@ class TelegramChatService {
 
   Future<ChatSnippet> getRandomSnippet({int contextCount = 3}) async {
     final export = await _chatService.loadExport();
+    return _createSnippet(export, _random, contextCount: contextCount);
+  }
+
+  Future<ChatSnippet> getDailySnippet({
+    DateTime? date,
+    int contextCount = 3,
+  }) async {
+    final export = await _chatService.loadExport();
+    final localDate = (date ?? DateTime.now()).toLocal();
+    final dayKey =
+        '${localDate.year.toString().padLeft(4, '0')}-'
+        '${localDate.month.toString().padLeft(2, '0')}-'
+        '${localDate.day.toString().padLeft(2, '0')}';
+    final preferences = await _getPreferences();
+    final saved = preferences.getString(dailySnippetKey);
+    String? previousSnippetId;
+    final identity = export.id?.toString() ?? _stableHash(export.name);
+    final exportFingerprint =
+        'balanced-window-v1:$identity:${export.messages.length}:'
+        '${export.lastMessageDate?.toUtc().toIso8601String() ?? 'none'}';
+    var hasValidSavedCache = false;
+    if (saved != null && saved.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(saved);
+        if (decoded is Map<String, dynamic> &&
+            decoded['exportFingerprint'] == exportFingerprint &&
+            decoded['date'] is String &&
+            decoded['snippet'] is Map) {
+          final cached = ChatSnippet.fromJson(
+            Map<String, dynamic>.from(decoded['snippet'] as Map),
+          );
+          hasValidSavedCache = true;
+          if (decoded['date'] == dayKey) return cached;
+          previousSnippetId = cached.id;
+        }
+      } on FormatException {
+        // A corrupt saved quote is disposable; rebuild it from the bundled export.
+      } on TypeError {
+        // A quote saved by an older app version may have an incompatible shape.
+      }
+      if (!hasValidSavedCache) await preferences.remove(dailySnippetKey);
+    }
+
+    final seed = int.parse(_stableHash('$identity:$dayKey'), radix: 16);
+    ChatSnippet snippet;
+    try {
+      snippet = _createSnippet(
+        export,
+        Random(seed),
+        contextCount: contextCount,
+        excludedSnippetId: previousSnippetId,
+      );
+    } on NoEligibleMemoryException {
+      if (previousSnippetId == null) rethrow;
+      snippet = _createSnippet(
+        export,
+        Random(seed),
+        contextCount: contextCount,
+      );
+    }
+    final didSave = await preferences.setString(
+      dailySnippetKey,
+      jsonEncode({
+        'date': dayKey,
+        'exportFingerprint': exportFingerprint,
+        'snippet': snippet.toJson(),
+      }),
+    );
+    if (!didSave) throw StateError('Unable to persist daily Telegram snippet.');
+    return snippet;
+  }
+
+  ChatSnippet _createSnippet(
+    ChatExport export,
+    Random random, {
+    required int contextCount,
+    String? excludedSnippetId,
+  }) {
     final messageAuthors = List<String?>.filled(export.messages.length, null);
     final participants = <String>{};
     for (var index = 0; index < export.messages.length; index++) {
@@ -134,16 +213,32 @@ class TelegramChatService {
     final participantKeys = participants.toList(growable: false);
     final firstParticipant = participantKeys[0];
     final secondParticipant = participantKeys[1];
-    final usableRows = List<bool>.filled(export.messages.length, false);
+    final minimumParticipantMessages = max(3, contextCount);
+    final invalidPrefix = List<int>.filled(export.messages.length + 1, 0);
+    final firstParticipantPrefix = List<int>.filled(
+      export.messages.length + 1,
+      0,
+    );
+    final secondParticipantPrefix = List<int>.filled(
+      export.messages.length + 1,
+      0,
+    );
     for (var index = 0; index < export.messages.length; index++) {
       final message = export.messages[index];
       final authorKey = messageAuthors[index];
-      usableRows[index] =
+      final isUsable =
           message.type == 'message' &&
           message.action == null &&
           message.text.trim().isNotEmpty &&
           (authorKey == firstParticipant || authorKey == secondParticipant) &&
           !_containsNegativeTrigger(message.text);
+      invalidPrefix[index + 1] = invalidPrefix[index] + (isUsable ? 0 : 1);
+      firstParticipantPrefix[index + 1] =
+          firstParticipantPrefix[index] +
+          (isUsable && authorKey == firstParticipant ? 1 : 0);
+      secondParticipantPrefix[index + 1] =
+          secondParticipantPrefix[index] +
+          (isUsable && authorKey == secondParticipant ? 1 : 0);
     }
 
     List<_IndexedMessage>? selectedWindow;
@@ -152,26 +247,20 @@ class TelegramChatService {
       for (var size = 6; size <= 10; size++) {
         final end = start + size;
         if (end > export.messages.length) break;
-        var firstParticipantCount = 0;
-        var secondParticipantCount = 0;
-        var eligible = true;
-        for (var index = start; index < end; index++) {
-          if (!usableRows[index]) {
-            eligible = false;
-            break;
-          }
-          final authorKey = messageAuthors[index]!;
-          if (authorKey == firstParticipant) {
-            firstParticipantCount++;
-          } else {
-            secondParticipantCount++;
-          }
-        }
+        final eligible = invalidPrefix[end] == invalidPrefix[start];
+        final firstParticipantCount =
+            firstParticipantPrefix[end] - firstParticipantPrefix[start];
+        final secondParticipantCount =
+            secondParticipantPrefix[end] - secondParticipantPrefix[start];
         if (eligible &&
-            firstParticipantCount >= 3 &&
-            secondParticipantCount >= 3) {
+            firstParticipantCount >= minimumParticipantMessages &&
+            secondParticipantCount >= minimumParticipantMessages) {
+          if (excludedSnippetId != null &&
+              _snippetId(export, start, size) == excludedSnippetId) {
+            continue;
+          }
           eligibleWindowCount++;
-          if (_random.nextInt(eligibleWindowCount) == 0) {
+          if (random.nextInt(eligibleWindowCount) == 0) {
             selectedWindow = List.generate(
               size,
               (offset) => _IndexedMessage(
@@ -206,13 +295,29 @@ class TelegramChatService {
           );
         })
         .toList(growable: false);
+    return ChatSnippet(
+      id: _snippetId(export, window.first.index, window.length),
+      messages: messages,
+    );
+  }
+
+  String _snippetId(ChatExport export, int start, int size) {
     final chatIdentity = export.id == null
         ? _stableHash(export.name)
         : export.id.toString();
-    return ChatSnippet(
-      id: 'chat-$chatIdentity:${messages.map((message) => message.id).join(':')}',
-      messages: messages,
-    );
+    final messageIds = <String>[];
+    for (var index = start; index < start + size; index++) {
+      final message = export.messages[index];
+      final authorName = message.from?.name.trim().isNotEmpty == true
+          ? message.from!.name.trim()
+          : (message.fromId ?? message.from?.id ?? 'Неизвестно');
+      messageIds.add(
+        message.id == null
+            ? 'index-$index-${_stableHash('$authorName\u0000${message.text}')}'
+            : 'id-${message.id}',
+      );
+    }
+    return 'chat-$chatIdentity:${messageIds.join(':')}';
   }
 
   static String? _participantKey(Message message) {

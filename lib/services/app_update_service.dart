@@ -2,264 +2,142 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const appReleasePackageName = 'com.example.love_anniversary_app';
-const appReleaseBucket = 'app-releases';
-const _supabaseUrl = 'https://xbbybirzhmhlsnvmyvxa.supabase.co';
-const _maximumApkBytes = 512 * 1024 * 1024;
-const _updateFunctionName = 'app-update-check';
-
-class AppUpdate {
-  const AppUpdate({
-    required this.versionCode,
-    required this.sha256,
-    required this.apkObjectPath,
-    required this.versionName,
-    required this.packageName,
-    required this.releaseNotes,
-    required this.downloadUrl,
-  });
-
-  final int versionCode;
-  final String sha256;
-  final String apkObjectPath;
-  final String versionName;
-  final String packageName;
-  final String releaseNotes;
-  final String downloadUrl;
-
-  factory AppUpdate.fromFunctionResponse(Map<String, dynamic> json) {
-    final versionCode = json['versionCode'];
-    final checksum = json['sha256'];
-    final objectPath = json['apkObjectPath'];
-    final versionName = json['versionName'];
-    final packageName = json['packageName'];
-    final releaseNotes = json['releaseNotes'];
-    final downloadUrl = json['downloadUrl'];
-
-    if (versionCode is! int || versionCode < 1) {
-      throw const FormatException('Update has an invalid version code.');
-    }
-    if (checksum is! String ||
-        !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(checksum)) {
-      throw const FormatException('Update has an invalid SHA-256 hash.');
-    }
-    if (objectPath != 'releases/$versionCode/app-release.apk') {
-      throw const FormatException('Update has an invalid APK object path.');
-    }
-    if (versionName is! String || versionName.isEmpty) {
-      throw const FormatException('Update has no version name.');
-    }
-    if (packageName != appReleasePackageName) {
-      throw const FormatException('Update is for a different Android package.');
-    }
-    if (releaseNotes is! String) {
-      throw const FormatException('Update has invalid release notes.');
-    }
-    if (downloadUrl is! String ||
-        !_isTrustedSignedDownloadUrl(downloadUrl, versionCode)) {
-      throw const FormatException('Update has an untrusted download URL.');
-    }
-
-    return AppUpdate(
-      versionCode: versionCode,
-      sha256: checksum.toLowerCase(),
-      apkObjectPath: objectPath,
-      versionName: versionName,
-      packageName: packageName,
-      releaseNotes: releaseNotes,
-      downloadUrl: downloadUrl,
-    );
-  }
-
-  bool isNewerThan(int installedVersionCode) =>
-      versionCode > installedVersionCode;
-
-  static bool _isTrustedSignedDownloadUrl(String value, int versionCode) {
-    final uri = Uri.tryParse(value);
-    if (uri == null ||
-        uri.scheme != 'https' ||
-        uri.host != Uri.parse(_supabaseUrl).host ||
-        uri.userInfo.isNotEmpty ||
-        (uri.port != 443 && uri.port != 0) ||
-        uri.queryParameters['token']?.isNotEmpty != true ||
-        uri.fragment.isNotEmpty) {
-      return false;
-    }
-    return uri.pathSegments.length == 8 &&
-        uri.pathSegments[0] == 'storage' &&
-        uri.pathSegments[1] == 'v1' &&
-        uri.pathSegments[2] == 'object' &&
-        uri.pathSegments[3] == 'sign' &&
-        uri.pathSegments[4] == appReleaseBucket &&
-        uri.pathSegments[5] == 'releases' &&
-        uri.pathSegments[6] == '$versionCode' &&
-        uri.pathSegments[7] == 'app-release.apk';
-  }
-}
+import '../models/app_release.dart';
+import 'supabase_backend.dart';
 
 abstract interface class AppUpdateService {
-  Future<AppUpdate?> checkForUpdate();
+  Future<AppRelease?> checkForUpdate();
 
-  Future<bool> downloadAndInstall(AppUpdate update);
+  Future<void> installUpdate(AppRelease release);
 }
 
 class SupabaseAppUpdateService implements AppUpdateService {
   SupabaseAppUpdateService({
-    this.channel = const MethodChannel('love_anniversary_app/app'),
-    this.client,
-  });
+    required this.client,
+    http.Client? httpClient,
+    MethodChannel? channel,
+  }) : _httpClient = httpClient ?? http.Client(),
+       _channel = channel ?? const MethodChannel('love_anniversary_app/app');
 
-  final MethodChannel channel;
-  final SupabaseClient? client;
+  static const _maxApkBytes = 300 * 1024 * 1024;
+  static const _packageName = AppRelease.expectedPackageName;
 
-  SupabaseClient get _supabase => client ?? Supabase.instance.client;
+  final SupabaseClient client;
+  final http.Client _httpClient;
+  final MethodChannel _channel;
 
   @override
-  Future<AppUpdate?> checkForUpdate() async {
+  Future<AppRelease?> checkForUpdate() async {
     if (!Platform.isAndroid) return null;
 
-    final installed = await channel.invokeMapMethod<String, dynamic>(
+    final installed = await _channel.invokeMapMethod<String, dynamic>(
       'getAppVersion',
     );
-    final installedVersionCode = int.tryParse(
-      installed?['buildNumber']?.toString() ?? '',
-    );
-    if (installedVersionCode == null) {
-      throw const FormatException('Installed app version is unavailable.');
+    if (installed == null ||
+        installed['packageName'] != _packageName ||
+        installed['versionCode'] is! int) {
+      throw StateError('Unable to read the installed Android app version.');
     }
 
-    final response = await _supabase.functions.invoke(
-      _updateFunctionName,
+    final installedVersionCode = installed['versionCode'] as int;
+    final response = await client.functions.invoke(
+      'app-update-check',
       body: {
         'versionCode': installedVersionCode,
-        'packageName': appReleasePackageName,
+        'packageName': _packageName,
       },
     );
-    final data = response.data;
-    if (data is! Map) {
-      throw const FormatException('Update check returned an invalid response.');
+    if (response.status < 200 || response.status >= 300) {
+      throw StateError('App update check failed (${response.status}).');
     }
-    final responseJson = Map<String, dynamic>.from(data);
-    if (responseJson['updateAvailable'] != true) return null;
+    if (response.data is! Map) {
+      throw const FormatException('Invalid app update response.');
+    }
 
-    final update = AppUpdate.fromFunctionResponse(responseJson);
-    return update.isNewerThan(installedVersionCode) ? update : null;
+    return AppRelease.fromUpdateResponse(
+      Map<String, dynamic>.from(response.data as Map),
+      supabaseBaseUrl: Uri.parse(supabaseUrl),
+      installedVersionCode: installedVersionCode,
+    );
   }
 
   @override
-  Future<bool> downloadAndInstall(AppUpdate update) async {
+  Future<void> installUpdate(AppRelease release) async {
     if (!Platform.isAndroid) {
-      throw UnsupportedError('APK updates are available only on Android.');
-    }
-    if (!AppUpdate._isTrustedSignedDownloadUrl(
-      update.downloadUrl,
-      update.versionCode,
-    )) {
-      throw const FormatException('Update has an untrusted download URL.');
+      throw UnsupportedError('APK updates are only supported on Android.');
     }
 
-    final updatesDirectory = Directory(
-      '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}updates',
+    final allowed =
+        await _channel.invokeMethod<bool>('canInstallPackages') ?? false;
+    if (!allowed) {
+      await _channel.invokeMethod<void>('openUnknownSourcesSettings');
+      throw const AppInstallPermissionRequired();
+    }
+
+    final temp = await getTemporaryDirectory();
+    final updateDirectory = Directory(
+      '${temp.path}${Platform.pathSeparator}app_updates',
     );
-    await updatesDirectory.create(recursive: true);
-    final apk = File(
-      '${updatesDirectory.path}${Platform.pathSeparator}app-release.apk',
+    await updateDirectory.create(recursive: true);
+    final apkFile = File(
+      '${updateDirectory.path}${Platform.pathSeparator}release-${release.versionCode}.apk',
     );
-    if (!await apk.exists() || await _fileSha256(apk) != update.sha256) {
-      await _downloadVerifiedApk(
-        Uri.parse(update.downloadUrl),
-        apk,
-        update.sha256,
-      );
-    }
 
-    final canInstall =
-        await channel.invokeMethod<bool>('canRequestPackageInstalls') ?? false;
-    if (!canInstall) {
-      await channel.invokeMethod<void>('requestInstallPermission');
-      return false;
-    }
-    await channel.invokeMethod<void>('installApk', {'path': apk.path});
-    return true;
-  }
-
-  Future<void> _downloadVerifiedApk(
-    Uri uri,
-    File destination,
-    String expectedSha256,
-  ) async {
-    final client = HttpClient();
     try {
-      final request = await client.getUrl(uri);
+      final request = http.Request('GET', release.downloadUrl);
+      request.headers['Accept'] = 'application/vnd.android.package-archive';
       request.followRedirects = false;
-      request.headers.set(HttpHeaders.userAgentHeader, 'LoveAnniversaryApp');
-      final response = await request.close();
+      final response = await _httpClient.send(request);
       if (response.statusCode != HttpStatus.ok) {
-        throw HttpException(
-          'APK download failed (${response.statusCode}).',
-          uri: uri,
-        );
-      }
-      if (response.contentLength > _maximumApkBytes) {
-        throw const FormatException('APK exceeds the supported download size.');
+        throw HttpException('APK download failed (${response.statusCode}).');
       }
 
-      final digestSink = _DigestSink();
-      final digestInput = sha256.startChunkedConversion(digestSink);
-      final output = destination.openWrite();
-      var outputClosed = false;
-      var downloadedBytes = 0;
+      final output = apkFile.openWrite();
+      var receivedBytes = 0;
       try {
-        await for (final chunk in response) {
-          downloadedBytes += chunk.length;
-          if (downloadedBytes > _maximumApkBytes) {
-            throw const FormatException(
-              'APK exceeds the supported download size.',
-            );
+        await for (final chunk in response.stream) {
+          receivedBytes += chunk.length;
+          if (receivedBytes > _maxApkBytes) {
+            throw const HttpException('APK exceeds the allowed size.');
           }
-          digestInput.add(chunk);
           output.add(chunk);
         }
-        digestInput.close();
-        await output.flush();
         await output.close();
-        outputClosed = true;
-        if (digestSink.digest?.toString() != expectedSha256) {
-          throw const FormatException(
-            'Downloaded APK checksum does not match.',
-          );
-        }
       } catch (_) {
-        if (!outputClosed) await output.close();
-        if (await destination.exists()) await destination.delete();
+        await output.close();
         rethrow;
       }
-    } finally {
-      client.close(force: true);
-    }
-  }
 
-  Future<String> _fileSha256(File file) async {
-    final digestSink = _DigestSink();
-    final digestInput = sha256.startChunkedConversion(digestSink);
-    await for (final chunk in file.openRead()) {
-      digestInput.add(chunk);
+      if (receivedBytes == 0) {
+        throw const HttpException('The downloaded APK is empty.');
+      }
+
+      final digest = await sha256.bind(apkFile.openRead()).first;
+      if (digest.toString() != release.sha256) {
+        throw const FormatException('Downloaded APK checksum mismatch.');
+      }
+
+      final result = await _channel.invokeMethod<String>('installApk', {
+        'path': apkFile.path,
+      });
+      if (result == 'permission_required') {
+        await _channel.invokeMethod<void>('openUnknownSourcesSettings');
+        throw const AppInstallPermissionRequired();
+      }
+      if (result != 'started') {
+        throw StateError('Android did not open the package installer.');
+      }
+    } catch (_) {
+      if (await apkFile.exists()) await apkFile.delete();
+      rethrow;
     }
-    digestInput.close();
-    return digestSink.digest?.toString() ??
-        (throw StateError('Could not compute the APK checksum.'));
   }
 }
 
-class _DigestSink implements Sink<Digest> {
-  Digest? digest;
-
-  @override
-  void add(Digest value) => digest = value;
-
-  @override
-  void close() {}
+class AppInstallPermissionRequired implements Exception {
+  const AppInstallPermissionRequired();
 }

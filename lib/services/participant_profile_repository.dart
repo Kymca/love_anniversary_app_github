@@ -7,6 +7,7 @@ class ParticipantProfileRepository {
 
   static const firstNameKey = 'participant_name_first_v1';
   static const secondNameKey = 'participant_name_second_v1';
+  static const currentSideKey = 'current_participant_side_v1';
 
   final SharedPreferences? preferences;
 
@@ -20,18 +21,35 @@ class ParticipantProfileRepository {
     for (var index = 0; index < sides.length; index++) {
       final side = sides[index];
       final key = _keyFor(side);
-      var name = store.getString(key)?.trim();
-      if ((name == null || name.isEmpty) &&
-          pair != null &&
-          pair.members.length > index) {
-        name = pair.members[index].name.trim();
-        if (name.isNotEmpty && !(await store.setString(key, name))) {
-          throw StateError('Could not migrate participant name.');
+      final pairedName = pair != null && pair.members.length > index
+          ? pair.members[index].name.trim()
+          : null;
+      var name = pairedName?.isNotEmpty == true
+          ? pairedName
+          : store.getString(key)?.trim();
+      if (pairedName != null &&
+          pairedName.isNotEmpty &&
+          store.getString(key) != pairedName) {
+        if (!await store.setString(key, pairedName)) {
+          throw StateError('Could not synchronize participant name.');
         }
       }
       if (name != null && name.isNotEmpty) names[side] = name;
     }
     return names;
+  }
+
+  Future<String> loadCurrentSide() async {
+    final side = (await _store).getString(currentSideKey);
+    return side == 'second' ? 'second' : 'first';
+  }
+
+  Future<void> saveCurrentSide(String side) async {
+    if (side != 'first' && side != 'second') {
+      throw ArgumentError.value(side, 'side');
+    }
+    final saved = await (await _store).setString(currentSideKey, side);
+    if (!saved) throw StateError('Could not save current participant side.');
   }
 
   Future<void> saveName(String side, String name) async {

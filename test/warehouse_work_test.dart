@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:love_anniversary_app/screens/mini_games/grocery_store_screen.dart';
 import 'package:love_anniversary_app/screens/mini_games/warehouse_game_engine.dart';
@@ -178,6 +179,37 @@ void main() {
     expect(engine.missed, 0);
   });
 
+  test('game engine supports exactly five distinct box variants', () {
+    final variants = <int>{};
+    for (var seed = 0; seed < 100 && variants.length < 5; seed++) {
+      variants.add(
+        WarehouseGameEngine(
+          caught: 0,
+          missed: 0,
+          seed: seed,
+        ).boxes.single.variant,
+      );
+    }
+
+    expect(WarehouseGameEngine.boxVariantCount, 5);
+    expect(variants, {0, 1, 2, 3, 4});
+  });
+
+  test('all five warehouse box sprites are full-size image assets', () async {
+    for (
+      var variant = 1;
+      variant <= WarehouseGameEngine.boxVariantCount;
+      variant++
+    ) {
+      final asset = await rootBundle.load(
+        'assets/images/warehouse/warehouse_box_$variant.png',
+      );
+
+      expect(asset.getUint32(16), 32);
+      expect(asset.getUint32(20), 32);
+    }
+  });
+
   testWidgets('grocery store switches between shopping and warehouse work', (
     tester,
   ) async {
@@ -297,6 +329,10 @@ void main() {
     expect(find.byKey(const ValueKey('warehouse-move-right')), findsOneWidget);
     final stage = find.byKey(const ValueKey('warehouse-stage-aspect'));
     expect(tester.widget<AspectRatio>(stage).aspectRatio, 4 / 3);
+    final sceneFrame = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey('warehouse-scene-frame')),
+    );
+    expect(sceneFrame.position, DecorationPosition.background);
     final stageSize = tester.getSize(stage);
     expect(stageSize.width / stageSize.height, closeTo(4 / 3, 0.01));
     final background = tester.widget<Image>(
@@ -310,6 +346,22 @@ void main() {
       'assets/images/warehouse/warehouse_background.png',
     );
     expect(find.byKey(const ValueKey('warehouse-box-0')), findsOneWidget);
+    final boxImageFinder = find.descendant(
+      of: find.byKey(const ValueKey('warehouse-box-0')),
+      matching: find.byType(Image),
+    );
+    expect(boxImageFinder, findsOneWidget);
+    final boxImage = tester.widget<Image>(boxImageFinder);
+    expect(boxImage.fit, BoxFit.fill);
+    expect(boxImage.width, boxImage.height);
+    expect(boxImage.width, greaterThan(0));
+    expect(boxImage.image, isA<AssetImage>());
+    expect(
+      (boxImage.image as AssetImage).assetName,
+      matches(r'assets/images/warehouse/warehouse_box_[1-5]\.png'),
+    );
+    expect(tester.getSize(boxImageFinder).width, boxImage.width);
+    expect(tester.getSize(boxImageFinder).height, boxImage.height);
     final player = find.byKey(const ValueKey('warehouse-player'));
     final before = tester.widget<Positioned>(player).left!;
     await tester.tap(find.byKey(const ValueKey('warehouse-move-right')));

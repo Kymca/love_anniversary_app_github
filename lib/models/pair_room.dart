@@ -15,20 +15,24 @@ class PairMember {
 }
 
 class PairRoom {
-  const PairRoom({required this.code, required this.members});
+  const PairRoom({required this.code, required this.members, this.id});
 
+  final String? id;
   final String code;
   final List<PairMember> members;
 
   Map<String, Object?> toJson() => {
+    if (id != null) 'id': id,
     'code': code,
     'members': members.map((member) => member.toJson()).toList(),
   };
 
   factory PairRoom.fromJson(Map<String, Object?> json) {
+    final id = json['id'];
     final code = json['code'];
     final members = json['members'];
-    if (code is! String ||
+    if ((id != null && id is! String) ||
+        code is! String ||
         !RegExp(r'^\d{4}$').hasMatch(code) ||
         members is! List) {
       throw const FormatException('Invalid pair room.');
@@ -40,6 +44,10 @@ class PairRoom {
       }
       parsed.add(PairMember.fromJson(member));
     }
-    return PairRoom(code: code, members: List.unmodifiable(parsed));
+    return PairRoom(
+      id: id as String?,
+      code: code,
+      members: List.unmodifiable(parsed),
+    );
   }
 }

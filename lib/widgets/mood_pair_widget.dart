@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
@@ -14,6 +16,8 @@ class MoodPairWidget extends StatefulWidget {
     this.participantNames = const {},
     this.onNameChanged,
     this.onChanged,
+    this.participantSide = 'first',
+    this.isActive = true,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
@@ -22,6 +26,8 @@ class MoodPairWidget extends StatefulWidget {
   final Map<String, String> participantNames;
   final ValueChanged<Map<String, String>>? onNameChanged;
   final VoidCallback? onChanged;
+  final String participantSide;
+  final bool isActive;
   final DateTime Function() clock;
 
   @override
@@ -34,12 +40,65 @@ class _MoodPairWidgetState extends State<MoodPairWidget> {
   late final ParticipantProfileRepository _profileRepository =
       widget.profileRepository ?? ParticipantProfileRepository();
   late Future<DailyPairMood> _today = _repository.loadFor(widget.clock());
+  StreamSubscription<DailyPairMood>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isActive) _watchForUpdates();
+  }
+
+  @override
+  void didUpdateWidget(covariant MoodPairWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _today = _repository.loadFor(widget.clock());
+        _watchForUpdates();
+      } else {
+        _subscription?.cancel();
+        _subscription = null;
+      }
+    }
+    if (moodDateKey(oldWidget.clock()) != moodDateKey(widget.clock())) {
+      _subscription?.cancel();
+      _today = _repository.loadFor(widget.clock());
+      if (widget.isActive) _watchForUpdates();
+    }
+  }
+
+  void _watchForUpdates() {
+    _subscription = _repository
+        .watchFor(widget.clock())
+        .listen(
+          (mood) {
+            if (mounted) {
+              setState(() {
+                _today = Future.value(mood);
+              });
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (mounted) {
+              setState(() {
+                _today = Future.error(error, stackTrace);
+              });
+            }
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   Future<void> _record(String side, DailyMood mood) async {
-    await _repository.record(side, mood, date: widget.clock());
+    final pairMood = await _repository.record(side, mood, date: widget.clock());
     if (!mounted) return;
     setState(() {
-      _today = _repository.loadFor(widget.clock());
+      _today = Future.value(pairMood);
     });
     widget.onChanged?.call();
   }
@@ -102,7 +161,11 @@ class _MoodPairWidgetState extends State<MoodPairWidget> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 5),
-              Text(strings.localPairDemo),
+              Text(
+                _repository.isSynchronized
+                    ? strings.sharedPairSyncNotice
+                    : strings.localPairDemo,
+              ),
               const SizedBox(height: 12),
               for (final side in ['first', 'second'])
                 _ParticipantMood(
@@ -114,8 +177,12 @@ class _MoodPairWidgetState extends State<MoodPairWidget> {
                           ? strings.moodParticipantOne
                           : strings.moodParticipantTwo),
                   selected: pairMood.moods[side],
+                  editable: side == widget.participantSide,
                   onRename: () => _rename(side),
-                  onSelect: (mood) => _record(side, mood),
+                  showRename: !_repository.isSynchronized,
+                  onSelect: side == widget.participantSide
+                      ? (mood) => _record(side, mood)
+                      : null,
                   moodLabel: (mood) => _moodLabel(strings, mood),
                 ),
               if (pairMood.moods.length == 2) ...[
@@ -161,7 +228,9 @@ class _ParticipantMood extends StatelessWidget {
     required this.side,
     required this.participant,
     required this.selected,
+    required this.editable,
     required this.onRename,
+    required this.showRename,
     required this.onSelect,
     required this.moodLabel,
   });
@@ -169,8 +238,10 @@ class _ParticipantMood extends StatelessWidget {
   final String side;
   final String participant;
   final DailyMood? selected;
+  final bool editable;
   final VoidCallback onRename;
-  final ValueChanged<DailyMood> onSelect;
+  final bool showRename;
+  final ValueChanged<DailyMood>? onSelect;
   final String Function(DailyMood mood) moodLabel;
 
   @override
@@ -186,12 +257,13 @@ class _ParticipantMood extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
-          IconButton(
-            key: ValueKey('mood-participant-rename-$side'),
-            tooltip: AppLocalizations.of(context)!.editParticipantName,
-            onPressed: onRename,
-            icon: const Icon(Icons.edit_rounded, size: 18),
-          ),
+          if (showRename)
+            IconButton(
+              key: ValueKey('mood-participant-rename-$side'),
+              tooltip: AppLocalizations.of(context)!.editParticipantName,
+              onPressed: onRename,
+              icon: const Icon(Icons.edit_rounded, size: 18),
+            ),
         ],
       ),
       Wrap(
@@ -200,7 +272,7 @@ class _ParticipantMood extends StatelessWidget {
             IconButton(
               key: ValueKey('mood-choice-$side-${mood.name}'),
               tooltip: '$participant: ${moodLabel(mood)}',
-              onPressed: () => onSelect(mood),
+              onPressed: editable ? () => onSelect?.call(mood) : null,
               icon: Container(
                 decoration: selected == mood
                     ? BoxDecoration(

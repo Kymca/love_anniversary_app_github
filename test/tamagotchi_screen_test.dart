@@ -13,6 +13,7 @@ import 'package:love_anniversary_app/services/grocery_wallet.dart';
 import 'package:love_anniversary_app/widgets/duck_painter.dart';
 import 'package:love_anniversary_app/services/pair_repository.dart';
 import 'package:love_anniversary_app/services/mood_pair_repository.dart';
+import 'package:love_anniversary_app/services/duck_ownership_repository.dart';
 import 'package:love_anniversary_app/services/participant_profile_repository.dart';
 import 'package:love_anniversary_app/models/daily_mood.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,10 +60,15 @@ Future<void> _createLocalPair() async {
   await profiles.saveName('first', 'Тестовый участник');
   await profiles.saveName('second', 'Второй участник');
   await SharedPreferencesPairRepository(preferences: preferences)
-      .createPair('Тестовый участник');
+      .createPair('Алина');
 }
 
 void main() {
+  test('duck recall control is unavailable outside debug mode', () {
+    expect(shouldShowDuckRecall(debugMode: false), isFalse);
+    expect(shouldShowDuckRecall(debugMode: true), isTrue);
+  });
+
   testWidgets('pixel duck animates its wings and heart burst when tapped', (
     tester,
   ) async {
@@ -277,6 +283,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'tamagotchi_name': 'Кряква',
       'tamagotchi_birth_date': DateTime.now().millisecondsSinceEpoch,
+      'tamagotchi_last_fed_date': DateTime.now().millisecondsSinceEpoch,
     });
 
     final preferences = await SharedPreferences.getInstance();
@@ -285,6 +292,7 @@ void main() {
     );
     await profileRepository.saveName('first', 'Алина');
     await profileRepository.saveName('second', 'Саша');
+    await profileRepository.saveCurrentSide('first');
     await SharedPreferencesPairRepository(preferences: preferences)
         .createPair('Тестовый участник');
     final moodRepository = SharedPreferencesMoodPairRepository(
@@ -292,7 +300,13 @@ void main() {
     );
     final today = DateTime.now();
     await moodRepository.record('first', DailyMood.angry, date: today);
+    await profileRepository.saveCurrentSide('second');
     await moodRepository.record('second', DailyMood.joyful, date: today);
+    await profileRepository.saveCurrentSide('first');
+    await preferences.setString(
+      DuckOwnershipRepository.storageKey,
+      jsonEncode({'date': moodDateKey(today), 'side': 'second'}),
+    );
 
     await tester.pumpWidget(
       localizedTestApp(
@@ -304,8 +318,7 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.text('Алина'), findsOneWidget);
-    expect(find.text('Саша'), findsOneWidget);
+    expect(find.textContaining('Саша'), findsAtLeastNWidgets(1));
     DuckSpriteSheetPainter currentDuckPainter() => tester
         .widgetList<CustomPaint>(
           find.byKey(const ValueKey('pixel-duck-animation')),
@@ -316,6 +329,11 @@ void main() {
     var painter = currentDuckPainter();
     expect(painter.emotion, DuckEmotion.joyful);
 
+    await profileRepository.saveCurrentSide('second');
+    await preferences.setString(
+      DuckOwnershipRepository.storageKey,
+      jsonEncode({'date': moodDateKey(today), 'side': 'first'}),
+    );
     await tester.pumpWidget(
       localizedTestApp(
         home: TamagotchiScreen(
@@ -330,6 +348,91 @@ void main() {
     expect(painter.emotion, DuckEmotion.angry);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'non-owner gets no envelope without mood and reopens it after mood changes',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'tamagotchi_name': 'Кряква',
+        'tamagotchi_birth_date': DateTime.now().millisecondsSinceEpoch,
+        'tamagotchi_last_fed_date': DateTime.now().millisecondsSinceEpoch,
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final profiles = ParticipantProfileRepository(preferences: preferences);
+      await profiles.saveName('first', 'Алина');
+      await profiles.saveName('second', 'Саша');
+      await profiles.saveCurrentSide('first');
+      await SharedPreferencesPairRepository(preferences: preferences)
+          .createPair('Алина');
+      final moods = SharedPreferencesMoodPairRepository(
+        preferences: preferences,
+      );
+      await profiles.saveCurrentSide('second');
+
+      await tester.pumpWidget(
+        localizedTestApp(
+          home: TamagotchiScreen(
+            moodPairRepository: moods,
+            partnerSide: DuckPartnerSide.second,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byKey(const ValueKey('incoming-mood-envelope')),
+        findsNothing,
+      );
+
+      await profiles.saveCurrentSide('first');
+      await moods.record('first', DailyMood.angry, date: DateTime.now());
+      await profiles.saveCurrentSide('second');
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byKey(const ValueKey('incoming-mood-angry')), findsOneWidget);
+
+      final feedActions = find.byType(ActionChip);
+      expect(feedActions, findsWidgets);
+      await tester.ensureVisible(feedActions.first);
+      await tester.pump();
+      for (final element in feedActions.evaluate()) {
+        expect((element.widget as ActionChip).onPressed, isNull);
+      }
+
+      final workButton = find.byKey(
+        const ValueKey('tamagotchi-warehouse-work-button'),
+      );
+      await tester.ensureVisible(workButton);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(workButton).onPressed, isNull);
+
+      final envelope = find.byKey(const ValueKey('incoming-mood-envelope'));
+      await tester.ensureVisible(envelope);
+      await tester.pump();
+      await tester.tap(envelope);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const ValueKey('mood-envelope-face')), findsOneWidget);
+
+      await profiles.saveCurrentSide('first');
+      await moods.record('first', DailyMood.joyful, date: DateTime.now());
+      await profiles.saveCurrentSide('second');
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byKey(const ValueKey('incoming-mood-joyful')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('mood-envelope-face')), findsNothing);
+      await tester.ensureVisible(envelope);
+      await tester.pump();
+      await tester.tap(envelope);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(find.byKey(const ValueKey('mood-envelope-face')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('wardrobe purchase and jacket selection are persisted', (
     tester,
@@ -359,6 +462,11 @@ void main() {
     await tester.pumpWidget(localizedTestApp(home: const TamagotchiScreen()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
+    if (find.text('Как назовём уточку? 🦆').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Знакомиться!'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     final button = find.byKey(const ValueKey('open-duck-outfit-shop'));
     expect(button, findsOneWidget);
@@ -1011,55 +1119,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('first entry saves participant names before pair connection', (
+  testWidgets('unpaired duck asks to create a pair without a name form', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(localizedTestApp(home: const TamagotchiScreen()));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('participant-name-input-first')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('participant-name-input-second')),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('participant-name-input-first')),
-      'Алина',
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('participant-name-input-second')),
-      'Саша',
-    );
-    await tester.tap(find.byKey(const ValueKey('save-participant-name')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.textContaining('сначала создайте пару'), findsOneWidget);
+    expect(find.text('Создать пару'), findsOneWidget);
     expect(find.byKey(const ValueKey('duck-open-pairs')), findsOneWidget);
-    expect(find.byKey(const ValueKey('duck-create-test-pair')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
     final preferences = await SharedPreferences.getInstance();
     expect(
       preferences.getString(ParticipantProfileRepository.firstNameKey),
-      'Алина',
-    );
-    expect(
-      preferences.getString(ParticipantProfileRepository.secondNameKey),
-      'Саша',
+      isNull,
     );
     expect(preferences.getString('tamagotchi_name'), isNull);
     expect(preferences.getInt('tamagotchi_birth_date'), isNull);
+    expect(tester.takeException(), isNull);
+  });
 
-    await tester.tap(find.byKey(const ValueKey('duck-create-test-pair')));
+  testWidgets('duck is named only after the tamagotchi tab is opened', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await _createLocalPair();
+    await tester.pumpWidget(
+      localizedTestApp(home: const TamagotchiScreen(isActive: false)),
+    );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Как назовём уточку? 🦆'), findsNothing);
+
+    await tester.pumpWidget(
+      localizedTestApp(home: const TamagotchiScreen(isActive: true)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Как назовём уточку? 🦆'), findsOneWidget);
-    final activePair = await SharedPreferencesPairRepository(
-      preferences: preferences,
-    ).loadActivePair();
-    expect(activePair?.members, hasLength(1));
+    expect(tester.takeException(), isNull);
   });
 }

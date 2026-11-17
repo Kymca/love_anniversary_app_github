@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../services/chat_service.dart';
 import '../services/telegram_chat_service.dart';
 import '../theme/app_theme.dart';
 
@@ -32,16 +33,15 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
     _loadSnippet();
   }
 
-  Future<void> _loadSnippet() async {
-    final strings = AppLocalizations.of(context)!;
+  Future<void> _loadSnippet({bool daily = true}) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      final snippet = await _service.getRandomSnippet(
-        contextCount: widget.contextCount,
-      );
+      final snippet = daily
+          ? await _service.getDailySnippet(contextCount: widget.contextCount)
+          : await _service.getRandomSnippet(contextCount: widget.contextCount);
       final isFavorite = await _service.isFavorite(snippet);
       if (!mounted) return;
       setState(() {
@@ -52,15 +52,34 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
     } on NoEligibleMemoryException {
       if (!mounted) return;
       setState(() {
-        _errorMessage = strings.noEligibleMemoryError;
+        _snippet = null;
+        _isFavorite = false;
+        _errorMessage = null;
         _isLoading = false;
       });
-    } on Object {
+    } on ChatExportUnavailableException {
       if (!mounted) return;
       setState(() {
-        _errorMessage = strings.randomMemoryLoadError;
+        _snippet = null;
+        _isFavorite = false;
+        _errorMessage = null;
         _isLoading = false;
       });
+    } on Object catch (error, stackTrace) {
+      if (!mounted) return;
+      setState(() {
+        _snippet = null;
+        _isFavorite = false;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'random memory card',
+        ),
+      );
     }
   }
 
@@ -152,23 +171,25 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
                   ?.copyWith(color: AppColors.roseDeep),
             ),
           ],
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isLoading ? null : _loadSnippet,
-              icon: _isLoading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.casino_rounded),
-              label: Text(strings.showAnotherMoment),
+          if (_snippet != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isLoading ? null : () => _loadSnippet(daily: false),
+                icon: _isLoading
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.casino_rounded),
+                label: Text(strings.showAnotherMoment),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

@@ -8,6 +8,12 @@ abstract interface class CouponRepository {
   Future<bool> activate(String id, {DateTime? at});
 }
 
+abstract interface class PairCouponRepository implements CouponRepository {
+  Stream<void> watchChanges();
+
+  Stream<Coupon> watchPartnerActivations();
+}
+
 class HiveCouponRepository implements CouponRepository {
   HiveCouponRepository(this._box);
 
@@ -58,7 +64,7 @@ class HiveCouponRepository implements CouponRepository {
         await _box.put(coupon.id, coupon.copyWith(isActivated: false));
       }
     }
-    final daily = _dailyCouponFor(date);
+    final daily = dailyCouponFor(date);
     if (!_box.containsKey(daily.id)) await _box.put(daily.id, daily);
     return List.unmodifiable(_box.values);
   }
@@ -105,7 +111,7 @@ class InMemoryCouponRepository implements CouponRepository {
         _coupons[coupon.id] = coupon.copyWith(isActivated: false);
       }
     }
-    final daily = _dailyCouponFor(date);
+    final daily = dailyCouponFor(date);
     _coupons.putIfAbsent(daily.id, () => daily);
     return List.unmodifiable(_coupons.values);
   }
@@ -130,7 +136,7 @@ class InMemoryCouponRepository implements CouponRepository {
   }
 }
 
-Coupon _dailyCouponFor(DateTime date) {
+Coupon dailyCouponFor(DateTime date) {
   final day =
       '${date.year.toString().padLeft(4, '0')}-'
       '${date.month.toString().padLeft(2, '0')}-'

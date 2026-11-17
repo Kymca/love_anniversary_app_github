@@ -1,12 +1,20 @@
 {
   "@@locale": "uk",
   "appTitle": "Кохання",
+  "appUpdateMessage": "Доступне оновлення",
+  "appUpdateAction": "Оновити",
+  "appUpdateInstalling": "Підготовка…",
+  "appUpdateDismiss": "Пізніше",
+  "appUpdatePermissionHint": "Дозвольте встановлення для цього застосунку в налаштуваннях Android, потім натисніть «Оновити» ще раз.",
+  "appUpdateFailed": "Не вдалося завантажити оновлення. Спробуйте пізніше.",
   "homeTab": "Наша історія",
   "petTab": "Тамагочі",
   "memoriesTab": "Спогади",
   "couponsTab": "Купони",
   "notesTab": "Нотатки",
   "pairsTab": "Пари",
+  "settingsTab": "Налаштування",
+  "settingsTitle": "Налаштування",
   "rouletteTab": "Рулетка",
   "duckShortcut": "Наша качечка",
   "sendHeart": "Надіслати серденько",
@@ -19,7 +27,7 @@
   "couponRetry": "Спробувати ще раз",
   "couponEmptyTitle": "Поки немає купонів",
   "couponEmptyDescription": "Тут з'являться ваші бажання та сюрпризи.",
-  "couponNotificationNotConfigured": "Зовнішні сповіщення не налаштовані.",
+  "couponNotificationNotConfigured": "Push-сповіщення на пристрій партнера поки не підключені.",
   "couponActivationError": "Не вдалося зберегти активацію купона.",
   "couponScratchHint": "Проведи пальцем, щоб стерти",
   "couponActivate": "Активувати",
@@ -37,7 +45,9 @@
   "overlayPetTapHint": "Торкніться качечки, щоб потішити її",
   "pairCreateError": "Не вдалося створити пару: {error}",
   "@pairCreateError": {"placeholders": {"error": {}}},
-  "relationshipStarted": "З 13 листопада 2023 року • 20:30",
+  "anonymousSignInDisabled": "Щоб створити пару, увімкніть анонімні входи в Supabase: Auth > Sign In / Providers > Anonymous Sign-Ins.",
+  "pairAuthUnavailable": "Не вдалося увійти через Supabase. Спробуйте пізніше.",
+  "relationshipStarted": "З 14 листопада 2023 року",
   "beginning": "І це лише початок ♥",
   "couponActivatedMessage": "Купон активовано! Качечка несе тобі радість!",
   "language": "Мова",
@@ -98,12 +108,6 @@
   "@wardrobePreviewTitle": {"placeholders": {"name": {}}},
   "wardrobeInsufficientFunds": "Недостатньо коштів: потрібно {price} ₴, на балансі {balance} ₴.",
   "@wardrobeInsufficientFunds": {"placeholders": {"price": {"type": "int"}, "balance": {"type": "int"}}},
-  "updateAvailable": "Доступне оновлення {version}",
-  "@updateAvailable": {"placeholders": {"version": {}}},
-  "updateDescription": "Встановіть найновішу версію програми.",
-  "updateButton": "Оновити",
-  "updatePermissionInstructions": "Дозвольте встановлення з цього джерела в налаштуваннях, поверніться та натисніть «Оновити».",
-  "updateInstallFailure": "Не вдалося завантажити або відкрити програму встановлення оновлення.",
   "wardrobeOwned": "Придбано",
   "wardrobeSelected": "Обрано",
   "wardrobeChoose": "Обрати",
@@ -117,7 +121,7 @@
   "feedDuck": "Почастуй качечку",
   "feedVarietyRequired": "Качечці потрібне різноманіття — запропонуй їй щось інше.",
   "tamagotchiHelpTitle": "Як піклуватися про качечку",
-  "tamagotchiHelpCare": "Ситість зменшується на 25% за кожен день без їжі. Якщо не годувати 4 дні, качечка піде — її можна покликати назад.",
+  "tamagotchiHelpCare": "Ситість зменшується на 25% за кожен день без їжі. Якщо не годувати 4 дні, качечка піде.",
   "tamagotchiHelpFeed": "Натискай на їжу або продукти з магазину. Одну й ту саму їжу можна дати двічі поспіль, але втретє качечка попросить різноманіття. Історія зберігається.",
   "tamagotchiHelpPlay": "Натисни на качечку, щоб погратися й потішити її. У гардеробі можна приміряти, купувати та вдягати образи.",
   "foodCrumbs": "Крихти",
@@ -229,20 +233,45 @@
   "randomMemoryLoadError": "Не вдалося завантажити спогад. Перевірте файл експорту чату.",
   "favoriteUpdateError": "Не вдалося оновити обране. Спробуйте ще раз.",
   "pairsTitle": "Пари",
-  "pairSubtitle": "Створіть локальну пару або введіть код пари, вже збереженої на цьому пристрої.",
-  "pairLocalNotice": "Дані пари зберігаються лише на цьому пристрої. Для синхронізації з іншим пристроєм потрібен налаштований сервер.",
+  "pairSubtitle": "Створіть пару та передайте код другому учаснику.",
   "yourName": "Ваше ім'я",
-  "pairNameSetupRequired": "Спочатку вкажіть своє ім'я у Спільному тамагочі.",
+  "pairNameSetupRequired": "Введіть ім'я учасника.",
+  "pairEmailAuthTitle": "Створити обліковий запис / увійти за email-кодом",
+  "pairEmailAuthDescription": "Під’єднайте email-код, щоб створити обліковий запис або увійти з іншого пристрою. Підтвердження пошти не потрібне, щоб створити пару або приєднатися до неї.",
+  "pairEmailLabel": "Електронна пошта",
+  "pairSendEmailCode": "Надіслати код",
+  "pairEmailCodeLabel": "Код із листа",
+  "pairConfirmEmailCode": "Підтвердити email",
+  "pairEmailVerified": "Пошту прив'язано: {email}",
+  "@pairEmailVerified": {"placeholders": {"email": {}}},
+  "pairEmailAuthRequired": "Створювати пару та приєднуватися до неї можна без підтвердження email, зокрема анонімно.",
+  "pairEmailOptional": "Підтверджувати пошту не обов’язково, щоб створити пару або приєднатися до неї.",
+  "pairBackendUpdateRequired": "Щоб створювати пари без обов’язкової пошти, оновіть міграції Supabase.",
+  "pairEmailAuthError": "Не вдалося підтвердити email. Перевірте адресу й код та спробуйте ще раз.",
+  "pairEmailSendCodeError": "Supabase не надіслав код: {error}",
+  "@pairEmailSendCodeError": {"placeholders": {"error": {}}},
+  "pairEmailRateLimitError": "Supabase тимчасово обмежив надсилання листів. Код не надіслано. Не повторюйте запити — дочекайтеся оновлення ліміту. Якщо це часто трапляється, власник проєкту може налаштувати власний SMTP або Send Email Hook.",
+  "pairEmailVerifyCodeError": "Supabase не підтвердив код: {error}",
+  "@pairEmailVerifyCodeError": {"placeholders": {"error": {}}},
+  "pairEmailAuthUnavailable": "Вхід за email зараз недоступний. Спробуйте пізніше.",
+  "breakPair": "Розірвати пару",
+  "breakPairTitle": "Розірвати пару?",
+  "breakPairWarning": "Пару та всі її спільні дані буде видалено без можливості відновлення. Ваш обліковий запис залишиться активним.",
+  "breakPairConfirm": "Видалити пару й дані",
+  "pairDeleteError": "Не вдалося видалити пару. Спробуйте ще раз.",
+  "pairEmailNotVerified": "Пошту не підтверджено. Пару все одно можна створити або приєднатися до неї.",
   "enterYourName": "Введіть своє ім'я.",
   "nameTooLong": "Ім'я має бути коротшим за 40 символів.",
   "invalidPairCode": "Введіть код пари з чотирьох цифр.",
-  "pairNotFound": "Пару з таким кодом не знайдено на цьому пристрої.",
+  "pairNotFound": "Пару з таким кодом не знайдено.",
   "pairFull": "У цій парі вже є два учасники.",
+  "pairAlreadyInPair": "Ви вже перебуваєте в парі. Відкрийте наявну пару замість створення нової.",
+  "backendConnectionError": "Не вдалося зв’язатися із сервером. Перевірте з’єднання та спробуйте ще раз.",
   "createPair": "Створити пару",
   "pairCode": "Код пари",
   "joinPair": "Приєднатися",
-  "pairCodeTitle": "Код локальної пари (тест)",
-  "pairCodePrompt": "Код працює лише на цьому пристрої. Для підключення іншого пристрою потрібен сервер.",
+  "pairCodeTitle": "Код пари",
+  "pairCodePrompt": "Передайте цей код другому учаснику, щоб під’єднати його до вашої пари.",
   "copy": "Скопіювати",
   "done": "Готово",
   "yourPair": "Ваша пара",
@@ -281,6 +310,20 @@
   "moodOtherReaction": "Качечка нагадує: сьогодні можна запитати одне одного, яка підтримка буде приємною.",
   "moodToday": "Сьогодні: {mood}",
   "@moodToday": {"placeholders": {"mood": {}}},
+  "moodChange": "Змінити настрій",
+  "moodChangeTitle": "Обери настрій",
+  "moodHistoryForDate": "Настрій за {date}",
+  "@moodHistoryForDate": {"placeholders": {"date": {}}},
+  "moodNoHistory": "Для цієї дати ще немає записів.",
+  "moodHistoryLatest": "зараз",
+  "moodHistoryTimeUnknown": "Час не збережено",
+  "duckOwnedByYouToday": "Сьогодні качечка у вас.",
+  "duckOwnedByPartnerToday": "Сьогодні качечка в учасника: {name}.",
+  "@duckOwnedByPartnerToday": {"placeholders": {"name": {}}},
+  "duckMoodEnvelopeClosed": "Настрій партнера. Натисніть, щоб відкрити.",
+  "duckMoodEnvelopeOpen": "Настрій партнера: {mood}",
+  "@duckMoodEnvelopeOpen": {"placeholders": {"mood": {}}},
+  "duckNotOwnerAction": "Сьогодні піклуватися про качечку може лише її власник.",
   "moodResponse": "Нехай сьогодні знайдеться маленький привід подбати про себе й трохи порадіти.",
   "weekdayMon": "Пн",
   "weekdayTue": "Вт",
@@ -316,6 +359,8 @@
   "testCreatePair": "Створити тестову пару (тимчасово)",
   "testPairMemberName": "Тестовий учасник",
   "duckNameLocalNotice": "Ім'я качечки зберігається лише на цьому пристрої. Синхронізацію між учасниками ще не підключено.",
+  "duckNameSynchronizedNotice": "Ім'я качечки синхронізується між учасниками пари.",
+  "sharedPairSyncNotice": "Настрої синхронізуються між учасниками пари.",
   "cinemaLike": "подобається",
   "cinemaDislike": "не подобається",
   "cinemaLocalNotice": "Демо на одному пристрої: вибори видимі тут, але не синхронізуються та не є приватним голосуванням між пристроями.",
@@ -350,19 +395,10 @@
   "postcardsTab": "Листівки",
   "postcardsTitle": "Листівки",
   "postcardsSubtitle": "Тут зберігаються справді надіслані та отримані листівки.",
-  "postcardPushUnavailable": "LAN-сервер не налаштований. Запустіть сервер на ноутбуці, підключіть обидва телефони до тієї самої Wi-Fi мережі, потім укажіть адресу та спільний токен. Для отримання натисніть «Оновити».",
-  "postcardLanConfigured": "LAN-сервер налаштований. Телефони мають бути в тій самій Wi-Fi мережі, а сервер на ноутбуці — запущений. Нові листівки перевіряються вручну.",
-  "postcardLanSettings": "Налаштувати LAN-сервер",
-  "postcardLanUpdate": "Оновити вхідні",
-  "postcardLanSetupTitle": "Підключення до сервера ноутбука",
-  "postcardLanEndpoint": "Адреса ноутбука, наприклад http://192.168.1.5:8787",
-  "postcardLanToken": "Спільний токен пари з термінала сервера",
-  "postcardLanSide": "Цей телефон використовує сторону",
-  "postcardLanFirst": "Учасник 1",
-  "postcardLanSecond": "Учасник 2",
-  "postcardLanSaved": "Підключення до LAN-сервера збережено.",
-  "postcardLanHttpWarning": "Використовуйте лише довірену домашню Wi-Fi мережу: HTTP не шифрує трафік. Токен надає доступ до листівок пари.",
-  "postcardLanRefreshFailed": "Не вдалося отримати листівки з LAN-сервера. Перевірте адресу, токен, Wi-Fi та firewall.",
+  "postcardPushUnavailable": "Синхронізацію листівок із сервером ще не підключено.",
+  "postcardBackendConfigured": "Листівки синхронізуються із сервером пари, поки застосунок відкритий; push-сповіщення не підключені.",
+  "postcardRefreshInbox": "Оновити вхідні",
+  "postcardBackendRefreshFailed": "Не вдалося отримати листівки із сервера. Перевірте з’єднання та спробуйте ще раз.",
   "postcardsEmpty": "Поки листівок немає.",
   "postcardAll": "Усі",
   "postcardSentTab": "Надіслані",
@@ -430,61 +466,119 @@
   "rouletteRemoveChoice": "Видалити варіант {choice}",
   "@rouletteRemoveChoice": {"placeholders": {"choice": {}}},
   "rouletteSavedChoice": "Варіант додано",
-  "rouletteError": "Не вдалося зберегти варіанти рулетки."
-  ,"timeCapsuleOpen": "Можна переглянути"
-  ,"timeCapsuleOpensOn": "Відкриється {date}"
-  ,"newTimeCapsule": "Нова капсула часу"
-  ,"timeCapsuleNoteHint": "Записка для себе в майбутньому"
-  ,"attachPhoto": "Додати фото"
-  ,"photoSelected": "Фото вибрано"
-  ,"openOnDate": "Відкрити: {date}"
-  ,"sealCapsule": "Запечатати"
-  ,"choosePhotoError": "Не вдалося вибрати фото: {error}"
-  ,"capsuleNeedsContent": "Додайте текст або виберіть фото."
-  ,"photoUnavailable": "Фото недоступне"
-  ,"rouletteFoodOptionCook": "Приготувати разом"
-  ,"rouletteFoodOptionOrder": "Замовити улюблену їжу"
-  ,"rouletteFoodOptionCafe": "Сходити до кафе"
-  ,"rouletteFoodOptionPicnic": "Влаштувати пікнік"
-  ,"rouletteFoodOptionDessert": "Спекти десерт"
-  ,"rouletteMovieOptionRomcom": "Романтична комедія"
-  ,"rouletteMovieOptionCartoon": "Мультфільм"
-  ,"rouletteMovieOptionFavorite": "Улюблений фільм"
-  ,"rouletteMovieOptionNew": "Знайти щось нове"
-  ,"rouletteMovieOptionNight": "Влаштувати кіноніч"
-  ,"rouletteActivityOptionWalk": "Погуляти разом"
-  ,"rouletteActivityOptionBoardGame": "Зіграти в настільну гру"
-  ,"rouletteActivityOptionPhoto": "Влаштувати фотопрогулянку"
-  ,"rouletteActivityOptionHomeDate": "Влаштувати побачення вдома"
-  ,"rouletteActivityOptionMusic": "Послухати музику"
-  ,"warehouseTitle": "Робота на складі"
-  ,"warehouseSubtitle": "Лови коробки, що падають, рухаючи роклу. Спіймай усі 15!"
-  ,"warehouseSceneSemantics": "Склад: перетягуй пальцем, щоб рухати роклу та ловити коробки."
-  ,"warehouseStart": "Почати зміну"
-  ,"warehouseTired": "Качечка втомилася. Їй потрібно відпочити."
-  ,"warehouseCooldownRemaining": "Повернутися до роботи можна через {hours} год {minutes} хв."
-  ,"@warehouseCooldownRemaining": {"placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
-  ,"warehouseProgress": "Завершено: {caught} з {total}"
-  ,"@warehouseProgress": {"placeholders": {"caught": {"type": "int"}, "total": {"type": "int"}}}
-  ,"warehouseCaught": "Спіймано: {count}"
-  ,"@warehouseCaught": {"placeholders": {"count": {"type": "int"}}}
-  ,"warehouseMissed": "Повз: {count}"
-  ,"@warehouseMissed": {"placeholders": {"count": {"type": "int"}}}
-  ,"warehouseMoveLeft": "Рухати роклу ліворуч"
-  ,"warehouseMoveRight": "Рухати роклу праворуч"
-  ,"warehouseControlsHint": "Перетягуй склад або натискай стрілки"
-  ,"warehouseResultPerfectTitle": "Чудова зміна!"
-  ,"warehouseResultPartialTitle": "Гарна робота!"
-  ,"warehouseResultFailureTitle": "Зміну завершено"
-  ,"warehouseResultPerfectMessage": "Усі коробки спіймано — качечка пишається тобою!"
-  ,"warehouseResultPartialMessage": "Спіймано більше половини коробок. Непогано!"
-  ,"warehouseResultFailureMessage": "Спіймано менше половини коробок. Спробуємо пізніше."
-  ,"warehouseReward": "Зароблено: {amount} ₴"
-  ,"@warehouseReward": {"placeholders": {"amount": {"type": "int"}}}
-  ,"warehouseReturnHome": "На головну"
-  ,"warehouseRetrySave": "Повторити"
-  ,"warehouseWorkSaveError": "Не вдалося зберегти зміну на складі: {error}"
-  ,"@warehouseWorkSaveError": {"placeholders": {"error": {}}}
-  ,"groceryStoreTab": "Магазин"
-  ,"groceryWorkTab": "Робота"
+  "rouletteError": "Не вдалося синхронізувати варіанти рулетки.",
+  "rouletteListSwipeHint": "Гортайте вбік: активні варіанти та спільний список",
+  "rouletteDoThis": "Робимо",
+  "rouletteChoiceApplied": "Вибір збережено",
+  "timeCapsuleOpen": "Можна переглянути"
+,
+  "timeCapsuleOpensOn": "Відкриється {date}"
+,
+  "newTimeCapsule": "Нова капсула часу"
+,
+  "timeCapsuleNoteHint": "Записка для себе в майбутньому"
+,
+  "attachPhoto": "Додати фото"
+,
+  "photoSelected": "Фото вибрано"
+,
+  "openOnDate": "Відкрити: {date}"
+,
+  "sealCapsule": "Запечатати"
+,
+  "choosePhotoError": "Не вдалося вибрати фото: {error}"
+,
+  "capsuleNeedsContent": "Додайте текст або виберіть фото."
+,
+  "photoUnavailable": "Фото недоступне"
+,
+  "rouletteFoodOptionCook": "Приготувати разом"
+,
+  "rouletteFoodOptionOrder": "Замовити улюблену їжу"
+,
+  "rouletteFoodOptionCafe": "Сходити до кафе"
+,
+  "rouletteFoodOptionPicnic": "Влаштувати пікнік"
+,
+  "rouletteFoodOptionDessert": "Спекти десерт"
+,
+  "rouletteMovieOptionRomcom": "Романтична комедія"
+,
+  "rouletteMovieOptionCartoon": "Мультфільм"
+,
+  "rouletteMovieOptionFavorite": "Улюблений фільм"
+,
+  "rouletteMovieOptionNew": "Знайти щось нове"
+,
+  "rouletteMovieOptionNight": "Влаштувати кіноніч"
+,
+  "rouletteActivityOptionWalk": "Погуляти разом"
+,
+  "rouletteActivityOptionBoardGame": "Зіграти в настільну гру"
+,
+  "rouletteActivityOptionPhoto": "Влаштувати фотопрогулянку"
+,
+  "rouletteActivityOptionHomeDate": "Влаштувати побачення вдома"
+,
+  "rouletteActivityOptionMusic": "Послухати музику"
+,
+  "warehouseTitle": "Робота на складі"
+,
+  "warehouseSubtitle": "Лови коробки, що падають, рухаючи роклу. Спіймай усі 15!"
+,
+  "warehouseSceneSemantics": "Склад: перетягуй пальцем, щоб рухати роклу та ловити коробки."
+,
+  "warehouseStart": "Почати зміну"
+,
+  "warehouseTired": "Качечка втомилася. Їй потрібно відпочити."
+,
+  "warehouseCooldownRemaining": "Повернутися до роботи можна через {hours} год {minutes} хв."
+,
+  "@warehouseCooldownRemaining": {"placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
+,
+  "warehouseProgress": "Завершено: {caught} з {total}"
+,
+  "@warehouseProgress": {"placeholders": {"caught": {"type": "int"}, "total": {"type": "int"}}}
+,
+  "warehouseCaught": "Спіймано: {count}"
+,
+  "@warehouseCaught": {"placeholders": {"count": {"type": "int"}}}
+,
+  "warehouseMissed": "Повз: {count}"
+,
+  "@warehouseMissed": {"placeholders": {"count": {"type": "int"}}}
+,
+  "warehouseMoveLeft": "Рухати роклу ліворуч"
+,
+  "warehouseMoveRight": "Рухати роклу праворуч"
+,
+  "warehouseControlsHint": "Перетягуй склад або натискай стрілки"
+,
+  "warehouseResultPerfectTitle": "Чудова зміна!"
+,
+  "warehouseResultPartialTitle": "Гарна робота!"
+,
+  "warehouseResultFailureTitle": "Зміну завершено"
+,
+  "warehouseResultPerfectMessage": "Усі коробки спіймано — качечка пишається тобою!"
+,
+  "warehouseResultPartialMessage": "Спіймано більше половини коробок. Непогано!"
+,
+  "warehouseResultFailureMessage": "Спіймано менше половини коробок. Спробуємо пізніше."
+,
+  "warehouseReward": "Зароблено: {amount} ₴"
+,
+  "@warehouseReward": {"placeholders": {"amount": {"type": "int"}}}
+,
+  "warehouseReturnHome": "На головну"
+,
+  "warehouseRetrySave": "Повторити"
+,
+  "warehouseWorkSaveError": "Не вдалося зберегти зміну на складі: {error}"
+,
+  "@warehouseWorkSaveError": {"placeholders": {"error": {}}}
+,
+  "groceryStoreTab": "Магазин"
+,
+  "groceryWorkTab": "Робота"
 }

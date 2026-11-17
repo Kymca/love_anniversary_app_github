@@ -1,0 +1,102 @@
+{
+  "frameRate": 30,
+  "frameCount": 18,
+  "frameDurationMs": 33.333333333333336,
+  "durationMs": 600,
+  "closedFrameIndex": 0,
+  "closedFrames": [0, 1, 2, 3],
+  "moodOverlayStartFrame": 8,
+  "moodOverlayBounds": {
+    "x": 20,
+    "y": 5,
+    "width": 24,
+    "height": 24
+  },
+  "moodOverlaySizing": "scale 64x64 frame to bounds using nearest neighbor",
+  "moods": {
+    "joyful": {
+      "file": "joyful.png",
+      "loop": {
+        "file": "joyful_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    },
+    "calm": {
+      "file": "calm.png",
+      "loop": {
+        "file": "calm_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    },
+    "thoughtful": {
+      "file": "thoughtful.png",
+      "loop": {
+        "file": "thoughtful_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    },
+    "tired": {
+      "file": "tired.png",
+      "loop": {
+        "file": "tired_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    },
+    "blue": {
+      "file": "blue.png",
+      "loop": {
+        "file": "blue_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    },
+    "angry": {
+      "file": "angry.png",
+      "loop": {
+        "file": "angry_loop.png",
+        "frameRate": 30,
+        "frameCount": 60,
+        "frameDurationMs": 33.333333333333336,
+        "durationMs": 2000,
+        "looping": true,
+        "frameSize": {"width": 64, "height": 64},
+        "layout": "horizontal",
+        "filterQuality": "none"
+      }
+    }
+  }
+}

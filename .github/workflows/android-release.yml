@@ -45,7 +45,7 @@ jobs:
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SUPABASE_URL: https://xbbybirzhmhlsnvmyvxa.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           SUPABASE_STORAGE_BUCKET: app-releases
         run: |
           set -euo pipefail
@@ -54,7 +54,7 @@ jobs:
             ANDROID_KEY_ALIAS \
             ANDROID_STORE_PASSWORD \
             ANDROID_KEY_PASSWORD \
-            SUPABASE_SERVICE_ROLE_KEY \
+            SUPABASE_SECRET_KEY \
             SUPABASE_STORAGE_BUCKET; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Required repository secret $name is not configured."
@@ -138,7 +138,7 @@ jobs:
       - name: Upload to private Supabase Storage
         env:
           SUPABASE_URL: https://xbbybirzhmhlsnvmyvxa.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           SUPABASE_STORAGE_BUCKET: app-releases
           VERSION_CODE: ${{ steps.build.outputs.version-code }}
         run: |
@@ -147,9 +147,8 @@ jobs:
           auth_file="$RUNNER_TEMP/storage-headers"
           bucket_file="$RUNNER_TEMP/storage-bucket.json"
           trap 'rm -f "$auth_file" "$bucket_file"' EXIT
-          printf 'apikey: %s\nAuthorization: Bearer %s\n' \
-            "$SUPABASE_SERVICE_ROLE_KEY" \
-            "$SUPABASE_SERVICE_ROLE_KEY" > "$auth_file"
+          printf 'apikey: %s\n' \
+            "$SUPABASE_SECRET_KEY" > "$auth_file"
 
           curl --fail --silent --show-error \
             --header "@$auth_file" \

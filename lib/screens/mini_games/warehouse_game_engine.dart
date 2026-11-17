@@ -24,6 +24,8 @@ class WarehouseGameEvent {
 }
 
 class WarehouseGameEngine {
+  static const boxVariantCount = 5;
+
   WarehouseGameEngine({
     required int caught,
     required int missed,
@@ -102,7 +104,12 @@ class WarehouseGameEngine {
     if (_nextBoxId >= 15) return;
     final x = 0.12 + _random.nextDouble() * 0.76;
     _boxes.add(
-      WarehouseBox(id: _nextBoxId, x: x, y: 0.02, variant: _random.nextInt(4)),
+      WarehouseBox(
+        id: _nextBoxId,
+        x: x,
+        y: 0.02,
+        variant: _random.nextInt(boxVariantCount),
+      ),
     );
     _nextBoxId++;
   }

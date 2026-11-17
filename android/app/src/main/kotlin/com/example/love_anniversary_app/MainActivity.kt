@@ -20,66 +20,77 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "minimize" -> result.success(moveTaskToBack(true))
                 "getAppVersion" -> {
-                    val packageInfo = packageManager.getPackageInfo(packageName, 0)
-                    val buildNumber = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        packageInfo.longVersionCode
-                    } else {
-                        @Suppress("DEPRECATION")
-                        packageInfo.versionCode.toLong()
-                    }
+                    val info = packageManager.getPackageInfo(packageName, 0)
                     result.success(
                         mapOf(
-                            "versionName" to packageInfo.versionName,
-                            "buildNumber" to buildNumber.toString(),
+                            "packageName" to packageName,
+                            "versionName" to info.versionName,
+                            "versionCode" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                info.longVersionCode.toInt()
+                            } else {
+                                @Suppress("DEPRECATION")
+                                info.versionCode
+                            },
                         ),
                     )
                 }
-                "canRequestPackageInstalls" -> {
-                    result.success(
-                        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-                            packageManager.canRequestPackageInstalls(),
-                    )
-                }
-                "requestInstallPermission" -> {
-                    startActivity(
-                        Intent(
-                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                            Uri.parse("package:$packageName"),
-                        ),
-                    )
-                    result.success(null)
-                }
+                "canInstallPackages" -> result.success(canInstallPackages())
+                "openUnknownSourcesSettings" -> openUnknownSourcesSettings(result)
                 "installApk" -> installApk(call.argument<String>("path"), result)
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun installApk(path: String?, result: MethodChannel.Result) {
-        if (path == null) {
-            result.error("invalid_path", "APK path is missing.", null)
+    private fun canInstallPackages(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+
+    private fun openUnknownSourcesSettings(
+        result: MethodChannel.Result,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            result.error("unsupported_android_version", "Android 8 or later is required.", null)
             return
         }
-        val updatesDirectory = File(cacheDir, "updates").canonicalFile
-        val apk = File(path).canonicalFile
-        if (!apk.path.startsWith("${updatesDirectory.path}${File.separator}") ||
-            !apk.isFile
-        ) {
-            result.error("invalid_path", "APK is outside the update cache.", null)
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:$packageName"),
+        )
+        startActivity(intent)
+        result.success(null)
+    }
+
+    private fun installApk(path: String?, result: MethodChannel.Result) {
+        if (!canInstallPackages()) {
+            result.success("permission_required")
+            return
+        }
+        if (path.isNullOrBlank()) {
+            result.error("invalid_apk_path", "APK path is missing.", null)
             return
         }
 
-        val apkUri = FileProvider.getUriForFile(
+        val updateDirectory = File(cacheDir, "app_updates").canonicalFile
+        val apkFile = File(path).canonicalFile
+        if (!apkFile.path.startsWith(updateDirectory.path + File.separator) ||
+            !apkFile.isFile ||
+            !apkFile.name.endsWith(".apk", ignoreCase = true)
+        ) {
+            result.error("invalid_apk_path", "APK file is outside the update cache.", null)
+            return
+        }
+
+        val uri = FileProvider.getUriForFile(
             this,
             "$packageName.fileprovider",
-            apk,
+            apkFile,
         )
-        startActivity(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            },
-        )
-        result.success(null)
+        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(intent)
+        result.success("started")
     }
 }

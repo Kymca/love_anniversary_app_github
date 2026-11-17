@@ -1,9 +1,11 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../services/app_sound_service.dart';
 import '../services/roulette_repository.dart';
 import '../theme/app_theme.dart';
 
@@ -11,10 +13,14 @@ class RouletteScreen extends StatefulWidget {
   const RouletteScreen({
     super.key,
     this.repository,
+    this.pairRevision = 0,
+    this.isActive = true,
     this.random = math.Random.new,
   });
 
   final RouletteRepository? repository;
+  final int pairRevision;
+  final bool isActive;
   final math.Random Function() random;
 
   @override
@@ -30,20 +36,43 @@ class _RouletteScreenState extends State<RouletteScreen>
     duration: const Duration(milliseconds: 3200),
   )..addListener(_onSpinFrame);
   late final math.Random _random = widget.random();
+  final RouletteSpinSound _spinSound = RouletteSpinSound();
   late RouletteCategory _category = RouletteCategory.food;
   final _choiceController = TextEditingController();
   List<String> _choices = const [];
+  List<String> _sharedChoices = const [];
+  Set<String> _excludedKeys = {};
+  StreamSubscription<void>? _changesSubscription;
   double _rotation = 0;
   double _spinStart = 0;
   double _spinTarget = 0;
   String? _result;
   bool _isSpinning = false;
+  bool _isApplying = false;
+  bool _choiceApplied = false;
   bool _loadFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _refreshChoices();
+    if (widget.isActive) {
+      _refreshChoices();
+      _watchChanges();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant RouletteScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.isActive && oldWidget.isActive) {
+      _changesSubscription?.cancel();
+      _changesSubscription = null;
+    } else if (widget.isActive &&
+        (!oldWidget.isActive ||
+            widget.pairRevision != oldWidget.pairRevision)) {
+      _refreshChoices();
+      _watchChanges();
+    }
   }
 
   void _onSpinFrame() {
@@ -58,6 +87,8 @@ class _RouletteScreenState extends State<RouletteScreen>
     _controller
       ..removeListener(_onSpinFrame)
       ..dispose();
+    _spinSound.cancel();
+    _changesSubscription?.cancel();
     _choiceController.dispose();
     super.dispose();
   }
@@ -98,10 +129,12 @@ class _RouletteScreenState extends State<RouletteScreen>
     setState(() {
       _category = category;
       _result = null;
+      _choiceApplied = false;
       _choices = const [];
       _loadFailed = false;
     });
     await _refreshChoices();
+    _watchChanges();
   }
 
   Future<void> _addChoice() async {
@@ -148,16 +181,95 @@ class _RouletteScreenState extends State<RouletteScreen>
     }
   }
 
+  Future<void> _setChoiceActive(String choice, bool active) async {
+    try {
+      if (active) {
+        await _repository.addChoice(_category, choice);
+      } else {
+        await _repository.removeChoice(_category, choice);
+      }
+      if (mounted) await _refreshChoices();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.rouletteError)),
+        );
+      }
+    }
+  }
+
+  void _watchChanges() {
+    _changesSubscription?.cancel();
+    if (!widget.isActive) return;
+    _changesSubscription = _repository
+        .watchChanges(_category)
+        .listen(
+          (_) => _refreshChoices(),
+          onError: (Object _) {
+            if (mounted) setState(() => _loadFailed = true);
+          },
+        );
+  }
+
   Future<void> _refreshChoices() async {
     try {
-      final custom = await _repository.loadCustomChoices(_category);
+      final values = await Future.wait([
+        _repository.loadCustomChoices(_category),
+        _repository.loadSharedChoices(_category),
+        _repository.loadExcludedChoiceKeys(_category),
+      ]);
       if (!mounted) return;
       setState(() {
-        _choices = [..._defaults(AppLocalizations.of(context)!), ...custom];
+        final defaults = _defaults(AppLocalizations.of(context)!);
+        _excludedKeys = values[2].toSet();
+        _choices = [
+          for (var index = 0; index < defaults.length; index++)
+            if (!_excludedKeys.contains(_defaultChoiceKey(index)))
+              defaults[index],
+          ...values[0],
+        ];
+        _sharedChoices = values[1];
         _loadFailed = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadFailed = true);
+      if (mounted) {
+        setState(() {
+          _choices = const [];
+          _sharedChoices = const [];
+          _loadFailed = true;
+        });
+      }
+    }
+  }
+
+  String _defaultChoiceKey(int index) => 'builtin:${_category.name}:$index';
+
+  String _keyForChoice(String choice) {
+    final defaults = _defaults(AppLocalizations.of(context)!);
+    final index = defaults.indexOf(choice);
+    return index >= 0
+        ? _defaultChoiceKey(index)
+        : SharedPreferencesRouletteRepository.customChoiceKey(choice);
+  }
+
+  Future<void> _applyChoice() async {
+    final result = _result;
+    if (result == null || _isApplying) return;
+    setState(() => _isApplying = true);
+    try {
+      await _repository.applyChoice(_category, result, _keyForChoice(result));
+      if (!mounted) return;
+      setState(() {
+        _isApplying = false;
+        _choiceApplied = true;
+      });
+      await _refreshChoices();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isApplying = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.rouletteError)),
+      );
     }
   }
 
@@ -173,11 +285,17 @@ class _RouletteScreenState extends State<RouletteScreen>
         _rotation + math.pi * 2 * 5 + (delta < 0 ? delta + math.pi * 2 : delta);
     setState(() {
       _result = null;
+      _choiceApplied = false;
       _isSpinning = true;
       _spinStart = _rotation;
       _spinTarget = target;
     });
-    await _controller.forward();
+    _spinSound.start();
+    try {
+      await _controller.forward();
+    } finally {
+      _spinSound.cancel();
+    }
     if (!mounted) return;
     setState(() {
       _rotation = target;
@@ -185,12 +303,13 @@ class _RouletteScreenState extends State<RouletteScreen>
       _result = _choices[chosenIndex];
     });
     _controller.reset();
+    unawaited(AppSoundService.play(AppSoundEvent.rouletteStopped));
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
-    final categoryChoices = _defaults(strings);
+    final defaultChoices = _defaults(strings);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -236,6 +355,14 @@ class _RouletteScreenState extends State<RouletteScreen>
                         ),
                       ),
                     ),
+                    Positioned.fill(
+                      top: 16,
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          painter: _HeartBurstPainter(_controller.value),
+                        ),
+                      ),
+                    ),
                     const Icon(
                       Icons.arrow_drop_down_rounded,
                       key: ValueKey('roulette-pointer'),
@@ -265,6 +392,18 @@ class _RouletteScreenState extends State<RouletteScreen>
                   fontWeight: FontWeight.w800,
                 ),
               ),
+            if (_result != null) ...[
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                key: const ValueKey('roulette-do-this'),
+                onPressed: _isApplying || _choiceApplied ? null : _applyChoice,
+                child: Text(
+                  _choiceApplied
+                      ? strings.rouletteChoiceApplied
+                      : strings.rouletteDoThis,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const ValueKey('roulette-spin'),
@@ -305,29 +444,116 @@ class _RouletteScreenState extends State<RouletteScreen>
                 ),
               ],
             ),
-            if (categoryChoices.isEmpty) Text(strings.rouletteEmpty),
-            if (_choices.length > categoryChoices.length) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 190,
+              child: PageView(
+                key: const ValueKey('roulette-lists-pages'),
                 children: [
-                  for (final choice in _choices.skip(categoryChoices.length))
-                    InputChip(
-                      label: Text(choice),
-                      onDeleted: () => _removeChoice(choice),
-                      deleteButtonTooltipMessage: strings.rouletteRemoveChoice(
-                        choice,
-                      ),
-                    ),
+                  _ChoiceListPage(
+                    key: const ValueKey('roulette-active-list'),
+                    title: strings.rouletteSpin,
+                    choices: _choices,
+                    removable: _choices.skip(defaultChoices.length).toSet(),
+                    onRemove: _removeChoice,
+                    emptyMessage: strings.rouletteEmpty,
+                  ),
+                  _ChoiceListPage(
+                    key: const ValueKey('roulette-shared-list'),
+                    title: strings.rouletteAddChoice,
+                    choices: _sharedChoices,
+                    removable: const {},
+                    activeChoices: _choices.toSet(),
+                    onToggle: (choice, active) =>
+                        _setChoiceActive(choice, active),
+                    emptyMessage: strings.rouletteEmpty,
+                  ),
                 ],
               ),
-            ],
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                strings.rouletteListSwipeHint,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            const SizedBox(height: 26),
           ],
         ),
       ),
     );
   }
+}
+
+class _ChoiceListPage extends StatelessWidget {
+  const _ChoiceListPage({
+    super.key,
+    required this.title,
+    required this.choices,
+    required this.removable,
+    required this.emptyMessage,
+    this.activeChoices = const {},
+    this.onRemove,
+    this.onToggle,
+  });
+
+  final String title;
+  final List<String> choices;
+  final Set<String> removable;
+  final Set<String> activeChoices;
+  final String emptyMessage;
+  final ValueChanged<String>? onRemove;
+  final void Function(String choice, bool active)? onToggle;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    color: Colors.white.withValues(alpha: 0.62),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
+        ),
+        Expanded(
+          child: choices.isEmpty
+              ? Center(child: Text(emptyMessage))
+              : ListView.builder(
+                  key: ValueKey('choice-list-$title'),
+                  itemCount: choices.length,
+                  itemBuilder: (context, index) {
+                    final choice = choices[index];
+                    final isActive = activeChoices.contains(choice);
+                    return ListTile(
+                      dense: true,
+                      title: Text(choice),
+                      trailing: onToggle != null
+                          ? IconButton(
+                              tooltip: MaterialLocalizations.of(context)
+                                  .deleteButtonTooltip,
+                              onPressed: () => onToggle!(choice, !isActive),
+                              icon: Icon(
+                                isActive
+                                    ? Icons.check_circle_rounded
+                                    : Icons.add_circle_outline_rounded,
+                              ),
+                            )
+                          : removable.contains(choice)
+                          ? IconButton(
+                              tooltip: AppLocalizations.of(context)!
+                                  .rouletteRemoveChoice(choice),
+                              onPressed: () => onRemove?.call(choice),
+                              icon: const Icon(Icons.remove_circle_outline),
+                            )
+                          : null,
+                    );
+                  },
+                ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _RouletteWheelPainter extends CustomPainter {
@@ -354,6 +580,7 @@ class _RouletteWheelPainter extends CustomPainter {
       canvas.drawCircle(center, radius, Paint()..color = AppColors.lavender);
       return;
     }
+
     final sweep = math.pi * 2 / choices.length;
     for (var index = 0; index < choices.length; index++) {
       final start = -math.pi / 2 + index * sweep;
@@ -414,4 +641,52 @@ class _RouletteWheelPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RouletteWheelPainter oldDelegate) =>
       !listEquals(choices, oldDelegate.choices);
+}
+
+class _HeartBurstPainter extends CustomPainter {
+  const _HeartBurstPainter(this.progress);
+
+  final double progress;
+
+  static const _colors = [
+    Color(0xFFE68DA6),
+    Color(0xFFB55271),
+    Color(0xFFF2B8C8),
+    Color(0xFFD982A0),
+    Color(0xFFFFC5D8),
+    Color(0xFFCA6F8C),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0 || progress >= 1) return;
+    final center = size.center(Offset.zero);
+    final fade = (1 - progress).clamp(0.0, 1.0);
+    for (var index = 0; index < _colors.length; index++) {
+      final angle = math.pi * 2 * index / _colors.length - math.pi / 2;
+      final distance = 25 + progress * 76;
+      final heartSize = 8 + (1 - progress) * 5;
+      canvas.save();
+      canvas.translate(
+        center.dx + math.cos(angle) * distance,
+        center.dy + math.sin(angle) * distance,
+      );
+      canvas.rotate(angle + math.pi / 4);
+      canvas.scale(heartSize / 16);
+      final heart = Path()
+        ..moveTo(0, 7)
+        ..cubicTo(-9, 1, -7, -7, 0, -3)
+        ..cubicTo(7, -7, 9, 1, 0, 7)
+        ..close();
+      canvas.drawPath(
+        heart,
+        Paint()..color = _colors[index].withValues(alpha: fade),
+      );
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeartBurstPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }

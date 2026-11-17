@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/tamagotchi_screen.dart';
@@ -10,38 +11,131 @@ import 'screens/coupons_screen.dart';
 import 'screens/secret_notes_screen.dart';
 import 'screens/postcards_screen.dart';
 import 'screens/pairs_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/roulette_screen.dart';
+import 'models/app_release.dart';
+import 'widgets/duck_mood.dart';
+import 'widgets/app_update_banner.dart';
 import 'models/coupon.dart';
+import 'services/app_update_service.dart';
+import 'services/app_sound_service.dart';
 import 'services/coupon_repository.dart';
 import 'services/duck_local_notification_service.dart';
-import 'services/app_update_service.dart';
+import 'services/pair_push_registration_service.dart';
 import 'services/pair_repository.dart';
+import 'services/duck_ownership_repository.dart';
+import 'services/duck_name_repository.dart';
+import 'services/roulette_repository.dart';
+import 'services/supabase_backend.dart';
+import 'services/pair_email_auth_service.dart';
+import 'services/supabase_coupon_repository.dart';
+import 'services/supabase_duck_ownership_repository.dart';
+import 'services/supabase_pair_repository.dart';
+import 'services/supabase_roulette_repository.dart';
+import 'services/unavailable_backend.dart';
 import 'services/postcard_delivery_gateway.dart';
 import 'services/postcard_push_gateway.dart';
+import 'services/supabase_postcard_gateway.dart';
+import 'services/participant_profile_repository.dart';
+import 'services/mood_pair_repository.dart';
+import 'services/supabase_mood_pair_repository.dart';
 import 'services/telegram_coupon_notifier.dart';
+import 'services/telegram_chat_service.dart';
 import 'l10n/app_locale.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'theme/app_theme.dart';
 import 'widgets/random_memories_card.dart';
 
-final relationshipStartDate = DateTime(2023, 11, 13, 20, 30);
+final relationshipStartDate = DateTime(2023, 11, 14);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(
-    url: 'https://xbbybirzhmhlsnmvyvxa.supabase.co',
-    publishableKey: 'sb_publishable_RucfRH_JuqPwnt33Oo1uRQ_WOW4o6NS',
+  await (await SharedPreferences.getInstance()).remove(
+    'lan_postcard_config_v1',
   );
-  const botToken = String.fromEnvironment('TELEGRAM_BOT_TOKEN');
-  const chatId = String.fromEnvironment('TELEGRAM_CHAT_ID');
+  SupabaseClient? backendClient;
+  Object? backendError;
+  try {
+    backendClient = await initializeSupabase();
+  } catch (error) {
+    backendError = error;
+  }
+  final backendErrorMessage = backendError is AuthException
+      ? 'Supabase authentication is unavailable.'
+      : backendError?.toString() ?? 'Supabase is unavailable.';
+  final couponClient = backendClient;
+  final profiles = ParticipantProfileRepository();
+  final pairRepository = backendClient == null
+      ? UnavailablePairRepository(backendError ?? backendErrorMessage)
+      : SupabasePairRepository(backendClient);
+  final moodPairRepository = backendClient == null
+      ? SharedPreferencesMoodPairRepository(profileRepository: profiles)
+      : SupabaseMoodPairRepository(backendClient, pairRepository);
   runApp(
     LoveAnniversaryApp(
-      couponRepositoryFactory: () => HiveCouponRepository.open(),
-      couponNotifier: botToken.isEmpty || chatId.isEmpty
+      couponRepositoryFactory: () async {
+        final localRepository = await HiveCouponRepository.open();
+        if (couponClient == null) return localRepository;
+        return SupabaseCouponRepository(
+          client: couponClient,
+          pairRepository: pairRepository,
+          fallback: localRepository,
+        );
+      },
+      pairRepository: pairRepository,
+      moodPairRepository: moodPairRepository,
+      appUpdateService: backendClient == null
           ? null
-          : TelegramCouponNotifier(token: botToken, chatId: chatId),
+          : SupabaseAppUpdateService(client: backendClient),
+      pairEmailAuthService: backendClient == null
+          ? null
+          : SupabasePairEmailAuthService(backendClient.auth),
+      duckNameRepository: backendClient == null
+          ? UnavailableDuckNameRepository(backendErrorMessage)
+          : SupabaseDuckNameRepository(backendClient),
+      duckOwnershipRepository: backendClient == null
+          ? UnavailableDuckOwnershipRepository(backendErrorMessage)
+          : SupabaseDuckOwnershipRepository(
+              client: backendClient,
+              pairRepository: pairRepository,
+              profileRepository: profiles,
+            ),
+      rouletteRepository: backendClient == null
+          ? UnavailableRouletteRepository(backendErrorMessage)
+          : SupabaseRouletteRepository(
+              client: backendClient,
+              activePairId: () async =>
+                  (await pairRepository.loadActivePair())?.id,
+            ),
+      postcardDeliveryGateway: backendClient == null
+          ? null
+          : SupabasePostcardGateway(
+              client: backendClient,
+              pairRepository: pairRepository,
+            ),
+      postcardPushGateway: backendClient == null
+          ? null
+          : SupabasePostcardRealtimeGateway(backendClient),
     ),
   );
+  if (backendClient != null) {
+    unawaited(_initializePairPush(backendClient));
+  }
+}
+
+Future<void> _initializePairPush(SupabaseClient client) async {
+  try {
+    await PairPushRegistrationService.initialize(client: client);
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'pair push registration',
+        context: ErrorDescription('while initializing device notifications'),
+      ),
+    );
+  }
 }
 
 class LoveAnniversaryApp extends StatefulWidget {
@@ -51,18 +145,30 @@ class LoveAnniversaryApp extends StatefulWidget {
     this.couponRepositoryFactory,
     this.couponNotifier,
     this.duckNotificationService,
-    this.appUpdateService,
     this.postcardDeliveryGateway,
     this.postcardPushGateway,
+    this.pairRepository,
+    this.moodPairRepository,
+    this.pairEmailAuthService,
+    this.duckNameRepository,
+    this.duckOwnershipRepository,
+    this.rouletteRepository,
+    this.appUpdateService,
   });
 
   final CouponRepository? couponRepository;
   final Future<CouponRepository> Function()? couponRepositoryFactory;
   final CouponActivationNotifier? couponNotifier;
   final DuckLocalNotificationService? duckNotificationService;
-  final AppUpdateService? appUpdateService;
   final PostcardDeliveryGateway? postcardDeliveryGateway;
   final PostcardPushGateway? postcardPushGateway;
+  final PairRepository? pairRepository;
+  final MoodPairRepository? moodPairRepository;
+  final PairEmailAuthService? pairEmailAuthService;
+  final DuckNameRepository? duckNameRepository;
+  final DuckOwnershipService? duckOwnershipRepository;
+  final RouletteRepository? rouletteRepository;
+  final AppUpdateService? appUpdateService;
 
   @override
   State<LoveAnniversaryApp> createState() => _LoveAnniversaryAppState();
@@ -101,9 +207,15 @@ class _LoveAnniversaryAppState extends State<LoveAnniversaryApp> {
         couponRepositoryFactory: widget.couponRepositoryFactory,
         couponNotifier: widget.couponNotifier,
         duckNotificationService: widget.duckNotificationService,
-        appUpdateService: widget.appUpdateService,
         postcardDeliveryGateway: widget.postcardDeliveryGateway,
         postcardPushGateway: widget.postcardPushGateway,
+        pairRepository: widget.pairRepository,
+        moodPairRepository: widget.moodPairRepository,
+        pairEmailAuthService: widget.pairEmailAuthService,
+        duckNameRepository: widget.duckNameRepository,
+        duckOwnershipRepository: widget.duckOwnershipRepository,
+        rouletteRepository: widget.rouletteRepository,
+        appUpdateService: widget.appUpdateService,
         onLanguageChanged: _setLocale,
       ),
     );
@@ -116,9 +228,15 @@ class _AppShell extends StatefulWidget {
     required this.couponRepositoryFactory,
     required this.couponNotifier,
     required this.duckNotificationService,
-    required this.appUpdateService,
     required this.postcardDeliveryGateway,
     required this.postcardPushGateway,
+    required this.pairRepository,
+    required this.moodPairRepository,
+    required this.pairEmailAuthService,
+    required this.duckNameRepository,
+    required this.duckOwnershipRepository,
+    required this.rouletteRepository,
+    required this.appUpdateService,
     required this.onLanguageChanged,
   });
 
@@ -126,9 +244,15 @@ class _AppShell extends StatefulWidget {
   final Future<CouponRepository> Function()? couponRepositoryFactory;
   final CouponActivationNotifier? couponNotifier;
   final DuckLocalNotificationService? duckNotificationService;
-  final AppUpdateService? appUpdateService;
   final PostcardDeliveryGateway? postcardDeliveryGateway;
   final PostcardPushGateway? postcardPushGateway;
+  final PairRepository? pairRepository;
+  final MoodPairRepository? moodPairRepository;
+  final PairEmailAuthService? pairEmailAuthService;
+  final DuckNameRepository? duckNameRepository;
+  final DuckOwnershipService? duckOwnershipRepository;
+  final RouletteRepository? rouletteRepository;
+  final AppUpdateService? appUpdateService;
   final Future<void> Function(Locale locale) onLanguageChanged;
 
   @override
@@ -139,74 +263,107 @@ class _AppShellState extends State<_AppShell> {
   int _selectedIndex = 0;
   int _messengerEventId = 0;
   int _pairRevision = 0;
+  DuckPartnerSide _partnerSide = DuckPartnerSide.first;
   String? _duckTabName;
-  late final PairRepository _pairRepository = SharedPreferencesPairRepository();
-  late final DuckLocalNotificationService _duckNotifications =
-      widget.duckNotificationService ?? DuckLocalNotificationService();
-  late final AppUpdateService _appUpdates =
-      widget.appUpdateService ?? SupabaseAppUpdateService();
-  AppUpdate? _availableUpdate;
+  AppRelease? _availableUpdate;
   bool _isInstallingUpdate = false;
-  String? _updateMessage;
+  late final PairRepository _pairRepository =
+      widget.pairRepository ?? SharedPreferencesPairRepository();
+  late final MoodPairRepository _moodPairRepository =
+      widget.moodPairRepository ??
+      SharedPreferencesMoodPairRepository(
+        profileRepository: _participantProfiles,
+      );
+  late final DuckNameRepository _duckNameRepository =
+      widget.duckNameRepository ?? SharedPreferencesDuckNameRepository();
+  late final DuckLocalNotificationService _duckNotificationService =
+      widget.duckNotificationService ?? DuckLocalNotificationService();
+  late final DuckOwnershipService _duckOwnershipRepository =
+      widget.duckOwnershipRepository ??
+      DuckOwnershipRepository(profileRepository: _participantProfiles);
+  late final ParticipantProfileRepository _participantProfiles =
+      ParticipantProfileRepository();
 
   @override
   void initState() {
     super.initState();
-    _checkForAppUpdate();
+    _loadParticipantSide();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForAppUpdate());
+    });
   }
 
   Future<void> _checkForAppUpdate() async {
+    final service = widget.appUpdateService;
+    if (service == null) return;
     try {
-      final update = await _appUpdates.checkForUpdate();
-      if (mounted) setState(() => _availableUpdate = update);
+      final release = await service.checkForUpdate();
+      if (mounted && release != null) {
+        setState(() => _availableUpdate = release);
+      }
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
-          library: 'app update check',
+          library: 'app updater',
+          context: ErrorDescription('while checking for an Android update'),
         ),
       );
     }
   }
 
-  Future<void> _installAvailableUpdate() async {
-    final update = _availableUpdate;
-    if (update == null || _isInstallingUpdate) return;
+  Future<void> _installAppUpdate() async {
+    final service = widget.appUpdateService;
+    final release = _availableUpdate;
+    if (service == null || release == null || _isInstallingUpdate) return;
 
-    setState(() {
-      _isInstallingUpdate = true;
-      _updateMessage = null;
-    });
+    setState(() => _isInstallingUpdate = true);
     try {
-      final installerOpened = await _appUpdates.downloadAndInstall(update);
-      if (!mounted) return;
-      setState(() {
-        _updateMessage = installerOpened
-            ? null
-            : AppLocalizations.of(context)!.updatePermissionInstructions;
-      });
-    } catch (error, stackTrace) {
+      await service.installUpdate(release);
+    } on AppInstallPermissionRequired {
       if (mounted) {
-        setState(
-          () =>
-              _updateMessage = AppLocalizations.of(context)!
-                  .updateInstallFailure,
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.appUpdatePermissionHint,
+            ),
+          ),
         );
       }
+    } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
-          library: 'app update installation',
+          library: 'app updater',
+          context: ErrorDescription('while downloading or installing an APK'),
         ),
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.appUpdateFailed),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isInstallingUpdate = false);
     }
   }
 
-  void _onPairUpdated() => setState(() => _pairRevision++);
+  Future<void> _loadParticipantSide() async {
+    final side = await _participantProfiles.loadCurrentSide();
+    if (!mounted) return;
+    setState(() {
+      _partnerSide = side == 'second'
+          ? DuckPartnerSide.second
+          : DuckPartnerSide.first;
+      _pairRevision++;
+    });
+  }
+
+  void _onPairUpdated() => _loadParticipantSide();
 
   void _onDuckNameChanged(String? name) {
     if (_duckTabName == name) return;
@@ -228,31 +385,22 @@ class _AppShellState extends State<_AppShell> {
   }
 
   Future<void> _onCouponActivated(Coupon coupon) async {
-    final strings = AppLocalizations.of(context)!;
     _showCouponMessenger();
     try {
-      final shown = await _duckNotifications.notifyCouponActivated(coupon);
-      if (!shown && mounted) {
-        _showNotificationMessage(strings.notificationDenied);
-      }
+      await _duckNotificationService.notifyCouponActivated(coupon);
     } catch (error, stackTrace) {
-      if (mounted) {
-        _showNotificationMessage(strings.notificationFailure);
-      }
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
           stack: stackTrace,
-          library: 'coupon activation notification',
+          library: 'local coupon notification',
+          context: ErrorDescription(
+            'while notifying about an activated coupon',
+          ),
         ),
       );
     }
-  }
-
-  void _showNotificationMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    unawaited(AppSoundService.play(AppSoundEvent.couponActivated));
   }
 
   @override
@@ -264,12 +412,12 @@ class _AppShellState extends State<_AppShell> {
           bottom: false,
           child: Column(
             children: [
-              if (_availableUpdate != null)
-                _AppUpdateBanner(
-                  update: _availableUpdate!,
+              if (_availableUpdate case final release?)
+                AppUpdateBanner(
+                  release: release,
                   isInstalling: _isInstallingUpdate,
-                  message: _updateMessage,
-                  onInstall: _installAvailableUpdate,
+                  onInstall: _installAppUpdate,
+                  onDismiss: () => setState(() => _availableUpdate = null),
                 ),
               Expanded(
                 child: IndexedStack(
@@ -281,6 +429,9 @@ class _AppShellState extends State<_AppShell> {
                         onOpenDuck: () => _selectPage(1),
                         onOpenPairs: () => _selectPage(6),
                         onLanguageChanged: widget.onLanguageChanged,
+                        onParticipantNameChanged: _onPairUpdated,
+                        pairRepository: _pairRepository,
+                        isActive: _selectedIndex == 0,
                       ),
                     ),
                     _TabTransition(
@@ -291,6 +442,11 @@ class _AppShellState extends State<_AppShell> {
                         pairRevision: _pairRevision,
                         onOpenPairs: () => _selectPage(6),
                         onDuckNameChanged: _onDuckNameChanged,
+                        partnerSide: _partnerSide,
+                        isActive: _selectedIndex == 1,
+                        duckNameRepository: _duckNameRepository,
+                        moodPairRepository: _moodPairRepository,
+                        ownershipRepository: _duckOwnershipRepository,
                       ),
                     ),
                     _TabTransition(
@@ -304,6 +460,8 @@ class _AppShellState extends State<_AppShell> {
                         repositoryFactory: widget.couponRepositoryFactory,
                         notifier: widget.couponNotifier,
                         onActivated: _onCouponActivated,
+                        pairRevision: _pairRevision,
+                        isActive: _selectedIndex == 3,
                       ),
                     ),
                     _TabTransition(
@@ -311,6 +469,9 @@ class _AppShellState extends State<_AppShell> {
                       child: SecretNotesScreen(
                         deliveryGateway: widget.postcardDeliveryGateway,
                         pushGateway: widget.postcardPushGateway,
+                        moodPairRepository: _moodPairRepository,
+                        pairRepository: _pairRepository,
+                        isActive: _selectedIndex == 4,
                       ),
                     ),
                     _TabTransition(
@@ -318,18 +479,31 @@ class _AppShellState extends State<_AppShell> {
                       child: PostcardsScreen(
                         deliveryGateway: widget.postcardDeliveryGateway,
                         pushGateway: widget.postcardPushGateway,
+                        isActive: _selectedIndex == 5,
                       ),
                     ),
                     _TabTransition(
                       active: _selectedIndex == 6,
                       child: PairsScreen(
                         repository: _pairRepository,
+                        profileRevision: _pairRevision,
                         onPairUpdated: _onPairUpdated,
                       ),
                     ),
                     _TabTransition(
                       active: _selectedIndex == 7,
-                      child: const RouletteScreen(),
+                      child: RouletteScreen(
+                        repository: widget.rouletteRepository,
+                        pairRevision: _pairRevision,
+                        isActive: _selectedIndex == 7,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 8,
+                      child: SettingsScreen(
+                        authService: widget.pairEmailAuthService,
+                        onAuthChanged: _onPairUpdated,
+                      ),
                     ),
                   ],
                 ),
@@ -419,78 +593,21 @@ class _AppShellState extends State<_AppShell> {
                         onTap: () => _selectPage(7),
                       ),
                     ),
+                    SizedBox(
+                      width: 76,
+                      height: 62,
+                      child: _NavigationDestination(
+                        selected: _selectedIndex == 8,
+                        icon: Icons.settings_rounded,
+                        label: localizations.settingsTab,
+                        onTap: () => _selectPage(8),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AppUpdateBanner extends StatelessWidget {
-  const _AppUpdateBanner({
-    required this.update,
-    required this.isInstalling,
-    required this.message,
-    required this.onInstall,
-  });
-
-  final AppUpdate update;
-  final bool isInstalling;
-  final String? message;
-  final VoidCallback onInstall;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = AppLocalizations.of(context)!;
-    return Card(
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          children: [
-            const Icon(Icons.system_update_alt_rounded),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    strings.updateAvailable(update.versionName),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  Text(
-                    update.releaseNotes.isEmpty
-                        ? strings.updateDescription
-                        : update.releaseNotes,
-                  ),
-                  if (message != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        message!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(
-              onPressed: isInstalling ? null : onInstall,
-              child: isInstalling
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(strings.updateButton),
-            ),
-          ],
         ),
       ),
     );
@@ -583,12 +700,22 @@ class AnniversaryHomePage extends StatefulWidget {
     this.onOpenDuck,
     this.onOpenPairs,
     this.onLanguageChanged,
+    this.onParticipantNameChanged,
+    this.profileRepository,
+    this.pairRepository,
+    this.memoryService,
+    this.isActive = true,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
   final VoidCallback? onOpenDuck;
   final VoidCallback? onOpenPairs;
   final Future<void> Function(Locale locale)? onLanguageChanged;
+  final VoidCallback? onParticipantNameChanged;
+  final ParticipantProfileRepository? profileRepository;
+  final PairRepository? pairRepository;
+  final TelegramChatService? memoryService;
+  final bool isActive;
   final DateTime Function() clock;
 
   @override
@@ -597,17 +724,84 @@ class AnniversaryHomePage extends StatefulWidget {
 
 class _AnniversaryHomePageState extends State<AnniversaryHomePage> {
   late DateTime _now;
+  late final ParticipantProfileRepository _profileRepository =
+      widget.profileRepository ?? ParticipantProfileRepository();
+  late final PairRepository _pairRepository =
+      widget.pairRepository ?? SharedPreferencesPairRepository();
+  String? _participantName;
+  String _participantSide = 'first';
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _now = widget.clock();
+    _loadParticipantName();
+    _updateClockActivity();
+  }
+
+  @override
+  void didUpdateWidget(covariant AnniversaryHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) _updateClockActivity();
+  }
+
+  void _updateClockActivity() {
+    _timer?.cancel();
+    if (!widget.isActive) return;
+    _now = widget.clock();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() => _now = widget.clock());
-      }
+      if (mounted) setState(() => _now = widget.clock());
     });
+  }
+
+  Future<void> _loadParticipantName() async {
+    final side = await _profileRepository.loadCurrentSide();
+    final pair = await _pairRepository.loadActivePair();
+    final names = await _profileRepository.loadNames(pair: pair);
+    if (mounted) {
+      setState(() {
+        _participantSide = side;
+        _participantName = names[side];
+      });
+    }
+  }
+
+  Future<void> _editParticipantName() async {
+    final strings = AppLocalizations.of(context)!;
+    final nameFieldKey = GlobalKey<FormFieldState<String>>();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.editParticipantName),
+        content: TextFormField(
+          key: nameFieldKey,
+          initialValue: _participantName ?? '',
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(labelText: strings.yourName),
+          onFieldSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(nameFieldKey.currentState?.value),
+            child: Text(strings.save),
+          ),
+        ],
+      ),
+    );
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty || !mounted) return;
+    await _profileRepository.saveName(_participantSide, trimmedName);
+    if (!mounted) return;
+    setState(() => _participantName = trimmedName);
+    widget.onParticipantNameChanged?.call();
   }
 
   @override
@@ -707,10 +901,21 @@ class _AnniversaryHomePageState extends State<AnniversaryHomePage> {
                 ],
               ),
               const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('home-profile-name'),
+                onPressed: _editParticipantName,
+                icon: Icon(
+                  _participantName == null
+                      ? Icons.person_add_alt_1_rounded
+                      : Icons.edit_rounded,
+                ),
+                label: Text(_participantName ?? localizations.yourName),
+              ),
+              const SizedBox(height: 10),
               RomanticTap(
                 semanticsLabel: localizations.sendHeart,
                 onTap: HapticFeedback.selectionClick,
-                child: const _PulsingHeart(),
+                child: _PulsingHeart(isActive: widget.isActive),
               ),
               const SizedBox(height: 22),
               Text(
@@ -803,7 +1008,7 @@ class _AnniversaryHomePageState extends State<AnniversaryHomePage> {
                 ),
               ),
               const SizedBox(height: 24),
-              const RandomMemoriesCard(),
+              RandomMemoriesCard(service: widget.memoryService),
               const SizedBox(height: 24),
               Text(
                 localizations.beginning,
@@ -821,7 +1026,9 @@ class _AnniversaryHomePageState extends State<AnniversaryHomePage> {
 }
 
 class _PulsingHeart extends StatefulWidget {
-  const _PulsingHeart();
+  const _PulsingHeart({required this.isActive});
+
+  final bool isActive;
 
   @override
   State<_PulsingHeart> createState() => _PulsingHeartState();
@@ -834,7 +1041,24 @@ class _PulsingHeartState extends State<_PulsingHeart>
     duration: const Duration(milliseconds: 900),
     lowerBound: 0.94,
     upperBound: 1.06,
-  )..repeat(reverse: true);
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isActive) _controller.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulsingHeart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive == oldWidget.isActive) return;
+    if (widget.isActive) {
+      _controller.repeat(reverse: true);
+    } else {
+      _controller.stop(canceled: false);
+    }
+  }
 
   @override
   void dispose() {
@@ -846,6 +1070,7 @@ class _PulsingHeartState extends State<_PulsingHeart>
   Widget build(BuildContext context) {
     return ScaleTransition(
       scale: _controller,
+      key: const ValueKey('home-pulsing-heart-scale'),
       child: Container(
         width: 82,
         height: 82,

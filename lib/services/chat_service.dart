@@ -1,8 +1,18 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/chat_export.dart';
+
+class ChatExportUnavailableException implements Exception {
+  const ChatExportUnavailableException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => 'ChatExportUnavailableException: $cause';
+}
 
 class ChatService {
   ChatService({AssetBundle? bundle, this.assetPath = 'result.json'})
@@ -26,14 +36,15 @@ class ChatService {
   }
 
   Future<ChatExport> _loadExport() async {
-    final source = await _bundle.loadString(assetPath);
-    final decoded = jsonDecode(source);
-    if (decoded is! Map) {
-      throw const FormatException(
-        'Telegram export root must be a JSON object.',
-      );
+    try {
+      final source = await _bundle.loadString(assetPath);
+      final decoded = source.length > 100000
+          ? await compute(_decodeExportJson, source)
+          : _decodeExportJson(source);
+      return ChatExport.fromJson(Map<String, dynamic>.from(decoded));
+    } on Object catch (error) {
+      throw ChatExportUnavailableException(error);
     }
-    return ChatExport.fromJson(Map<String, dynamic>.from(decoded));
   }
 
   Future<List<Message>> getMessages() async => (await loadExport()).messages;
@@ -46,4 +57,12 @@ class ChatService {
 
   Future<Map<String, int>> getMessageCountsByParticipant() async =>
       (await loadExport()).messageCountsByParticipant;
+}
+
+Map<String, dynamic> _decodeExportJson(String source) {
+  final decoded = jsonDecode(source);
+  if (decoded is! Map) {
+    throw const FormatException('Telegram export root must be a JSON object.');
+  }
+  return Map<String, dynamic>.from(decoded);
 }

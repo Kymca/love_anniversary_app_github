@@ -153,10 +153,14 @@ run uploads an APK and manifest. In GitHub **Settings → Secrets and variables
 → Actions**, add repository
 secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`,
 `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`,
-and `SUPABASE_SERVICE_ROLE_KEY`. `SUPABASE_URL` is the public project URL and
-is fixed in the workflow, so it is not a secret. The service-role key is used
-only by the GitHub Actions upload step; never put it in Dart defines, the app,
-or source control. The currently installed APK's signing certificate was
+and `SUPABASE_SECRET_KEY` (the Supabase secret API key, prefixed `sb_secret_`).
+The workflow sends it only in the Storage `apikey` header; it does not use a
+Bearer authorization header. Do not substitute the publishable key. `SUPABASE_URL`
+is the public project URL and is fixed in the workflow, so it is not a secret.
+The Edge Function continues using Supabase's server-side
+`SUPABASE_SERVICE_ROLE_KEY` environment internally; do not add that value to
+GitHub Actions secrets, Dart defines, the app, or source control. The currently
+installed APK's signing certificate was
 confirmed to match the local Android debug keystore at
 `%USERPROFILE%\.android\debug.keystore`; use that exact keystore for
 `ANDROID_KEYSTORE_BASE64`, with its matching alias/passwords in the other
@@ -181,10 +185,24 @@ the endpoint read-only: return update metadata and a short-lived signed URL
 for this one bucket/object only. Keep the bucket private and the service-role
 credential server-side; never expose it to the app.
 
-The current checkout is not yet reconciled with the separate main folder
-workspace. Choose the canonical source of truth and verify the deployed
-function's contract against this branch before enabling release uploads for
-users.
+The current app's selected Dart sources and required app assets have been
+synced into this branch. Private `result.json`, machine-local configuration,
+and build/cache artifacts were not copied; the GitHub-only LAN postcard
+modules were preserved.
+
+The current pair, shared-mood, shared-coupon, and push client code may need
+newer Supabase backend objects than production currently has. Those pair/push
+migrations and Edge Functions are intentionally outside this updater change
+and were not applied or deployed. Before releasing the synchronized app,
+review the backend requirements separately, including migrations
+`20261114170000_allow_anonymous_pair_members`,
+`20261115100000_pair_shared_moods_and_membership_guards`,
+`20261117100000_pair_shared_coupons`, and
+`20261117130000_pair_push_notifications`, plus the
+`register-push-device` and `push-dispatch` functions. Existing production
+pairing migrations are older equivalents and should not be blindly reapplied.
+The optional pair-push registration also requires Firebase client Dart defines;
+without them, push registration remains disabled.
 
 To integrate this updater into another app checkout, merge the updater service,
 function/config/migration and test, then make a surgical merge in that checkout's `lib/main.dart` to
