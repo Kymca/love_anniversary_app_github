@@ -356,6 +356,25 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String updateAvailable(Object version) {
+    return 'Доступно обновление $version';
+  }
+
+  @override
+  String get updateDescription => 'Установите последнюю версию приложения.';
+
+  @override
+  String get updateButton => 'Обновить';
+
+  @override
+  String get updatePermissionInstructions =>
+      'Разрешите установку из этого источника в настройках, вернитесь и нажмите «Обновить».';
+
+  @override
+  String get updateInstallFailure =>
+      'Не удалось скачать или открыть установщик обновления.';
+
+  @override
   String get wardrobeOwned => 'Куплено';
 
   @override

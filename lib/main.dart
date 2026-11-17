@@ -14,6 +14,7 @@ import 'screens/roulette_screen.dart';
 import 'models/coupon.dart';
 import 'services/coupon_repository.dart';
 import 'services/duck_local_notification_service.dart';
+import 'services/app_update_service.dart';
 import 'services/pair_repository.dart';
 import 'services/postcard_delivery_gateway.dart';
 import 'services/postcard_push_gateway.dart';
@@ -50,6 +51,7 @@ class LoveAnniversaryApp extends StatefulWidget {
     this.couponRepositoryFactory,
     this.couponNotifier,
     this.duckNotificationService,
+    this.appUpdateService,
     this.postcardDeliveryGateway,
     this.postcardPushGateway,
   });
@@ -58,6 +60,7 @@ class LoveAnniversaryApp extends StatefulWidget {
   final Future<CouponRepository> Function()? couponRepositoryFactory;
   final CouponActivationNotifier? couponNotifier;
   final DuckLocalNotificationService? duckNotificationService;
+  final AppUpdateService? appUpdateService;
   final PostcardDeliveryGateway? postcardDeliveryGateway;
   final PostcardPushGateway? postcardPushGateway;
 
@@ -98,6 +101,7 @@ class _LoveAnniversaryAppState extends State<LoveAnniversaryApp> {
         couponRepositoryFactory: widget.couponRepositoryFactory,
         couponNotifier: widget.couponNotifier,
         duckNotificationService: widget.duckNotificationService,
+        appUpdateService: widget.appUpdateService,
         postcardDeliveryGateway: widget.postcardDeliveryGateway,
         postcardPushGateway: widget.postcardPushGateway,
         onLanguageChanged: _setLocale,
@@ -112,6 +116,7 @@ class _AppShell extends StatefulWidget {
     required this.couponRepositoryFactory,
     required this.couponNotifier,
     required this.duckNotificationService,
+    required this.appUpdateService,
     required this.postcardDeliveryGateway,
     required this.postcardPushGateway,
     required this.onLanguageChanged,
@@ -121,6 +126,7 @@ class _AppShell extends StatefulWidget {
   final Future<CouponRepository> Function()? couponRepositoryFactory;
   final CouponActivationNotifier? couponNotifier;
   final DuckLocalNotificationService? duckNotificationService;
+  final AppUpdateService? appUpdateService;
   final PostcardDeliveryGateway? postcardDeliveryGateway;
   final PostcardPushGateway? postcardPushGateway;
   final Future<void> Function(Locale locale) onLanguageChanged;
@@ -137,6 +143,68 @@ class _AppShellState extends State<_AppShell> {
   late final PairRepository _pairRepository = SharedPreferencesPairRepository();
   late final DuckLocalNotificationService _duckNotifications =
       widget.duckNotificationService ?? DuckLocalNotificationService();
+  late final AppUpdateService _appUpdates =
+      widget.appUpdateService ?? SupabaseAppUpdateService();
+  AppUpdate? _availableUpdate;
+  bool _isInstallingUpdate = false;
+  String? _updateMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForAppUpdate();
+  }
+
+  Future<void> _checkForAppUpdate() async {
+    try {
+      final update = await _appUpdates.checkForUpdate();
+      if (mounted) setState(() => _availableUpdate = update);
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'app update check',
+        ),
+      );
+    }
+  }
+
+  Future<void> _installAvailableUpdate() async {
+    final update = _availableUpdate;
+    if (update == null || _isInstallingUpdate) return;
+
+    setState(() {
+      _isInstallingUpdate = true;
+      _updateMessage = null;
+    });
+    try {
+      final installerOpened = await _appUpdates.downloadAndInstall(update);
+      if (!mounted) return;
+      setState(() {
+        _updateMessage = installerOpened
+            ? null
+            : AppLocalizations.of(context)!.updatePermissionInstructions;
+      });
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(
+          () =>
+              _updateMessage = AppLocalizations.of(context)!
+                  .updateInstallFailure,
+        );
+      }
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'app update installation',
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isInstallingUpdate = false);
+    }
+  }
 
   void _onPairUpdated() => setState(() => _pairRevision++);
 
@@ -194,64 +262,77 @@ class _AppShellState extends State<_AppShell> {
       child: Scaffold(
         body: SafeArea(
           bottom: false,
-          child: IndexedStack(
-            index: _selectedIndex,
+          child: Column(
             children: [
-              _TabTransition(
-                active: _selectedIndex == 0,
-                child: AnniversaryHomePage(
-                  onOpenDuck: () => _selectPage(1),
-                  onOpenPairs: () => _selectPage(6),
-                  onLanguageChanged: widget.onLanguageChanged,
+              if (_availableUpdate != null)
+                _AppUpdateBanner(
+                  update: _availableUpdate!,
+                  isInstalling: _isInstallingUpdate,
+                  message: _updateMessage,
+                  onInstall: _installAvailableUpdate,
                 ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 1,
-                child: TamagotchiScreen(
-                  messengerEventId: _messengerEventId,
-                  pairRepository: _pairRepository,
-                  pairRevision: _pairRevision,
-                  onOpenPairs: () => _selectPage(6),
-                  onDuckNameChanged: _onDuckNameChanged,
+              Expanded(
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: [
+                    _TabTransition(
+                      active: _selectedIndex == 0,
+                      child: AnniversaryHomePage(
+                        onOpenDuck: () => _selectPage(1),
+                        onOpenPairs: () => _selectPage(6),
+                        onLanguageChanged: widget.onLanguageChanged,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 1,
+                      child: TamagotchiScreen(
+                        messengerEventId: _messengerEventId,
+                        pairRepository: _pairRepository,
+                        pairRevision: _pairRevision,
+                        onOpenPairs: () => _selectPage(6),
+                        onDuckNameChanged: _onDuckNameChanged,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 2,
+                      child: const MemoriesScreen(),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 3,
+                      child: CouponsScreen(
+                        repository: widget.couponRepository,
+                        repositoryFactory: widget.couponRepositoryFactory,
+                        notifier: widget.couponNotifier,
+                        onActivated: _onCouponActivated,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 4,
+                      child: SecretNotesScreen(
+                        deliveryGateway: widget.postcardDeliveryGateway,
+                        pushGateway: widget.postcardPushGateway,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 5,
+                      child: PostcardsScreen(
+                        deliveryGateway: widget.postcardDeliveryGateway,
+                        pushGateway: widget.postcardPushGateway,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 6,
+                      child: PairsScreen(
+                        repository: _pairRepository,
+                        onPairUpdated: _onPairUpdated,
+                      ),
+                    ),
+                    _TabTransition(
+                      active: _selectedIndex == 7,
+                      child: const RouletteScreen(),
+                    ),
+                  ],
                 ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 2,
-                child: const MemoriesScreen(),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 3,
-                child: CouponsScreen(
-                  repository: widget.couponRepository,
-                  repositoryFactory: widget.couponRepositoryFactory,
-                  notifier: widget.couponNotifier,
-                  onActivated: _onCouponActivated,
-                ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 4,
-                child: SecretNotesScreen(
-                  deliveryGateway: widget.postcardDeliveryGateway,
-                  pushGateway: widget.postcardPushGateway,
-                ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 5,
-                child: PostcardsScreen(
-                  deliveryGateway: widget.postcardDeliveryGateway,
-                  pushGateway: widget.postcardPushGateway,
-                ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 6,
-                child: PairsScreen(
-                  repository: _pairRepository,
-                  onPairUpdated: _onPairUpdated,
-                ),
-              ),
-              _TabTransition(
-                active: _selectedIndex == 7,
-                child: const RouletteScreen(),
               ),
             ],
           ),
@@ -343,6 +424,73 @@ class _AppShellState extends State<_AppShell> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppUpdateBanner extends StatelessWidget {
+  const _AppUpdateBanner({
+    required this.update,
+    required this.isInstalling,
+    required this.message,
+    required this.onInstall,
+  });
+
+  final AppUpdate update;
+  final bool isInstalling;
+  final String? message;
+  final VoidCallback onInstall;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context)!;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.system_update_alt_rounded),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    strings.updateAvailable(update.versionName),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  Text(
+                    update.releaseNotes.isEmpty
+                        ? strings.updateDescription
+                        : update.releaseNotes,
+                  ),
+                  if (message != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        message!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: isInstalling ? null : onInstall,
+              child: isInstalling
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(strings.updateButton),
+            ),
+          ],
         ),
       ),
     );

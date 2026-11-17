@@ -596,6 +596,36 @@ abstract class AppLocalizations {
   /// **'Недостаточно средств: нужно {price} ₴, на балансе {balance} ₴.'**
   String wardrobeInsufficientFunds(int price, int balance);
 
+  /// No description provided for @updateAvailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Доступно обновление {version}'**
+  String updateAvailable(Object version);
+
+  /// No description provided for @updateDescription.
+  ///
+  /// In ru, this message translates to:
+  /// **'Установите последнюю версию приложения.'**
+  String get updateDescription;
+
+  /// No description provided for @updateButton.
+  ///
+  /// In ru, this message translates to:
+  /// **'Обновить'**
+  String get updateButton;
+
+  /// No description provided for @updatePermissionInstructions.
+  ///
+  /// In ru, this message translates to:
+  /// **'Разрешите установку из этого источника в настройках, вернитесь и нажмите «Обновить».'**
+  String get updatePermissionInstructions;
+
+  /// No description provided for @updateInstallFailure.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось скачать или открыть установщик обновления.'**
+  String get updateInstallFailure;
+
   /// No description provided for @wardrobeOwned.
   ///
   /// In ru, this message translates to:

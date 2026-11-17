@@ -1,0 +1,186 @@
+name: Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: Optional release notes
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-upload:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Check release secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: https://xbbybirzhmhlsnvmyvxa.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: app-releases
+        run: |
+          set -euo pipefail
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEY_ALIAS \
+            ANDROID_STORE_PASSWORD \
+            ANDROID_KEY_PASSWORD \
+            SUPABASE_SERVICE_ROLE_KEY \
+            SUPABASE_STORAGE_BUCKET; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Required repository secret $name is not configured."
+              exit 1
+            fi
+          done
+          if [[ ! "$SUPABASE_STORAGE_BUCKET" =~ ^[a-z0-9_-]+$ ]]; then
+            echo "::error::SUPABASE_STORAGE_BUCKET contains unsupported characters."
+            exit 1
+          fi
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Configure release signing
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/love-anniversary-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          keytool -list -keystore "$keystore" \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          echo "path=$keystore" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK and manifest
+        id: build
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.path }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+          version_name="$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)"
+          if [[ -z "$version_name" ]]; then
+            echo "::error::Could not read the app version from pubspec.yaml."
+            exit 1
+          fi
+          version_code="$((1000 + GITHUB_RUN_NUMBER))"
+          if (( version_code > 2100000000 )); then
+            echo "::error::Android versionCode limit exceeded."
+            exit 1
+          fi
+          flutter build apk --release \
+            --build-name "$version_name" \
+            --build-number "$version_code"
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/app-release.apk
+          checksum="$(sha256sum dist/app-release.apk | cut -d ' ' -f 1)"
+          commit_notes="$(git log -1 --pretty=%s)"
+          release_notes="${INPUT_RELEASE_NOTES:-$commit_notes}"
+          export VERSION_NAME="$version_name"
+          export VERSION_CODE="$version_code"
+          export APK_SHA256="$checksum"
+          export RELEASE_NOTES="$release_notes"
+          python3 - <<'PY'
+          import json
+          import os
+
+          code = int(os.environ["VERSION_CODE"])
+          manifest = {
+              "versionCode": code,
+              "sha256": os.environ["APK_SHA256"],
+              "apkObjectPath": f"releases/{code}/app-release.apk",
+              "versionName": os.environ["VERSION_NAME"],
+              "packageName": "com.example.love_anniversary_app",
+              "releaseNotes": os.environ["RELEASE_NOTES"],
+          }
+          with open("dist/manifest.json", "w", encoding="utf-8") as file:
+              json.dump(manifest, file, ensure_ascii=False, indent=2)
+          PY
+          echo "version-code=$version_code" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to private Supabase Storage
+        env:
+          SUPABASE_URL: https://xbbybirzhmhlsnvmyvxa.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: app-releases
+          VERSION_CODE: ${{ steps.build.outputs.version-code }}
+        run: |
+          set -euo pipefail
+          base_url="${SUPABASE_URL%/}"
+          auth_file="$RUNNER_TEMP/storage-headers"
+          bucket_file="$RUNNER_TEMP/storage-bucket.json"
+          trap 'rm -f "$auth_file" "$bucket_file"' EXIT
+          printf 'apikey: %s\nAuthorization: Bearer %s\n' \
+            "$SUPABASE_SERVICE_ROLE_KEY" \
+            "$SUPABASE_SERVICE_ROLE_KEY" > "$auth_file"
+
+          curl --fail --silent --show-error \
+            --header "@$auth_file" \
+            "$base_url/storage/v1/bucket/$SUPABASE_STORAGE_BUCKET" \
+            --output "$bucket_file"
+          if ! jq -e '.public == false' "$bucket_file" >/dev/null; then
+            echo "::error::The configured Supabase Storage bucket must be private."
+            exit 1
+          fi
+
+          object_base="$base_url/storage/v1/object/$SUPABASE_STORAGE_BUCKET"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "@$auth_file" \
+            --header 'Content-Type: application/vnd.android.package-archive' \
+            --header 'x-upsert: false' \
+            --data-binary '@dist/app-release.apk' \
+            "$object_base/releases/$VERSION_CODE/app-release.apk"
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "@$auth_file" \
+            --header 'Content-Type: application/json' \
+            --header 'x-upsert: false' \
+            --data-binary '@dist/manifest.json' \
+            "$object_base/releases/$VERSION_CODE/manifest.json"
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "@$auth_file" \
+            --header 'Content-Type: application/json' \
+            --header 'x-upsert: true' \
+            --data-binary '@dist/manifest.json' \
+            "$object_base/releases/latest.json"

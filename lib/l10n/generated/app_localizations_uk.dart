@@ -356,6 +356,25 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
+  String updateAvailable(Object version) {
+    return 'Доступне оновлення $version';
+  }
+
+  @override
+  String get updateDescription => 'Встановіть найновішу версію програми.';
+
+  @override
+  String get updateButton => 'Оновити';
+
+  @override
+  String get updatePermissionInstructions =>
+      'Дозвольте встановлення з цього джерела в налаштуваннях, поверніться та натисніть «Оновити».';
+
+  @override
+  String get updateInstallFailure =>
+      'Не вдалося завантажити або відкрити програму встановлення оновлення.';
+
+  @override
   String get wardrobeOwned => 'Придбано';
 
   @override
