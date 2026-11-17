@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:love_anniversary_app/models/daily_mood.dart';
 import 'package:love_anniversary_app/services/mood_pair_repository.dart';
+import 'package:love_anniversary_app/services/participant_profile_repository.dart';
+import 'package:love_anniversary_app/widgets/duck_mood.dart';
 
 import 'dart:convert';
 
@@ -24,16 +26,37 @@ void main() {
       );
 
       await repository.record('first', DailyMood.blue, date: today);
-      expect((await repository.loadFor(today)).moods, hasLength(1));
+      final firstMarked = await repository.loadFor(today);
+      expect(firstMarked.moods, hasLength(1));
+      expect(
+        duckPartnerMoodForSide(firstMarked.moods, DuckPartnerSide.second),
+        DailyMood.blue,
+      );
+      final profiles = ParticipantProfileRepository(preferences: preferences);
+      await profiles.saveCurrentSide('second');
       final bothBlue = await repository.record(
         'second',
         DailyMood.blue,
         date: today,
       );
+      expect(
+        duckPartnerMoodForSide(bothBlue.moods, DuckPartnerSide.first),
+        DailyMood.blue,
+      );
       expect(bothBlue.reaction, contains('пледом и приносит чай'));
+      expect(
+        (await repository.historyFor('first', today)).single.mood,
+        DailyMood.blue,
+      );
+      expect(
+        (await repository.historyFor('second', today)).single.mood,
+        DailyMood.blue,
+      );
 
       final nextDay = DateTime(2026, 11, 7);
+      await profiles.saveCurrentSide('first');
       await repository.record('first', DailyMood.joyful, date: nextDay);
+      await profiles.saveCurrentSide('second');
       final bothJoyful = await repository.record(
         'second',
         DailyMood.joyful,
@@ -42,6 +65,18 @@ void main() {
       expect(bothJoyful.reaction, contains('танец'));
     },
   );
+
+  test('repository rejects mood writes for the other participant', () async {
+    final preferences = await SharedPreferences.getInstance();
+    final repository = SharedPreferencesMoodPairRepository(
+      preferences: preferences,
+    );
+    await expectLater(
+      repository.record('second', DailyMood.angry, date: today),
+      throwsA(isA<StateError>()),
+    );
+    expect((await repository.loadFor(today)).moods, isEmpty);
+  });
 
   testWidgets('pair mood widget retains local-only sync notice', (
     tester,
@@ -95,8 +130,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final preferences = await SharedPreferences.getInstance();
+    final profiles = ParticipantProfileRepository(preferences: preferences);
     final repository = SharedPreferencesMoodPairRepository(
       preferences: preferences,
+      profileRepository: profiles,
     );
     var changed = false;
     await tester.pumpWidget(
@@ -131,6 +168,7 @@ void main() {
     await tester.tap(joyfulChoice);
     await tester.pumpAndSettle();
     expect((await repository.loadFor(today)).moods['first'], DailyMood.joyful);
+    expect(await repository.historyFor('first', today), hasLength(2));
     final joyfulDecoration =
         (tester.widget<IconButton>(joyfulChoice).icon as Container).decoration
             as BoxDecoration;
@@ -138,7 +176,29 @@ void main() {
     expect((joyfulDecoration.border! as Border).top.color, Colors.black);
     expect((joyfulDecoration.border! as Border).top.width, 1);
 
-    await tester.tap(find.byKey(const ValueKey('mood-choice-second-blue')));
+    final partnerChoice = find.byKey(const ValueKey('mood-choice-second-blue'));
+    expect(tester.widget<IconButton>(partnerChoice).onPressed, isNull);
+    expect((await repository.loadFor(today)).moods['second'], isNull);
+
+    await profiles.saveCurrentSide('second');
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Scaffold(
+          body: MoodPairWidget(
+            repository: repository,
+            participantSide: 'second',
+            participantNames: const {'first': 'Маша', 'second': 'Илья'},
+            clock: () => today,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final secondChoice = find.byKey(const ValueKey('mood-choice-second-blue'));
+    expect(tester.widget<IconButton>(secondChoice).onPressed, isNotNull);
+    final firstChoice = find.byKey(const ValueKey('mood-choice-first-angry'));
+    expect(tester.widget<IconButton>(firstChoice).onPressed, isNull);
+    await tester.tap(secondChoice);
     await tester.pumpAndSettle();
     expect((await repository.loadFor(today)).moods['second'], DailyMood.blue);
   });

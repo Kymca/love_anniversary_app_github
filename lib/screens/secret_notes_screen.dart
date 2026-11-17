@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../services/mood_pair_repository.dart';
+import '../services/pair_repository.dart';
 import '../services/postcard_delivery_gateway.dart';
 import '../services/postcard_push_gateway.dart';
 import '../theme/app_theme.dart';
@@ -11,10 +13,20 @@ import '../widgets/mood_calendar_widget.dart';
 import '../widgets/time_capsule_widget.dart';
 
 class SecretNotesScreen extends StatelessWidget {
-  const SecretNotesScreen({super.key, this.deliveryGateway, this.pushGateway});
+  const SecretNotesScreen({
+    super.key,
+    this.deliveryGateway,
+    this.pushGateway,
+    this.moodPairRepository,
+    this.pairRepository,
+    this.isActive = true,
+  });
 
   final PostcardDeliveryGateway? deliveryGateway;
   final PostcardPushGateway? pushGateway;
+  final MoodPairRepository? moodPairRepository;
+  final PairRepository? pairRepository;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +51,11 @@ class SecretNotesScreen extends StatelessWidget {
             const SizedBox(height: 22),
             const CountdownWidget(),
             const SizedBox(height: 20),
-            const MoodCalendarWidget(),
+            MoodCalendarWidget(
+              repository: moodPairRepository,
+              pairRepository: pairRepository,
+              isActive: isActive,
+            ),
             const SizedBox(height: 20),
             const CinemaNightWidget(),
             const SizedBox(height: 20),

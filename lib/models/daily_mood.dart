@@ -47,26 +47,32 @@ class DailyMoodEntry {
     required this.dateKey,
     required this.mood,
     required this.compliment,
+    this.recordedAt,
   });
 
   final String dateKey;
   final DailyMood mood;
   final String compliment;
+  final DateTime? recordedAt;
 
   Map<String, Object?> toJson() => {
     'date': dateKey,
     'mood': mood.name,
     'compliment': compliment,
+    if (recordedAt != null) 'recordedAt': recordedAt!.toIso8601String(),
   };
 
   factory DailyMoodEntry.fromJson(Map<String, Object?> json) {
     final date = json['date'];
     final mood = json['mood'];
     final compliment = json['compliment'];
+    final recordedAt = json['recordedAt'];
     if (date is! String ||
         mood is! String ||
         compliment is! String ||
-        DateTime.tryParse(date) == null) {
+        DateTime.tryParse(date) == null ||
+        (recordedAt != null &&
+            (recordedAt is! String || DateTime.tryParse(recordedAt) == null))) {
       throw const FormatException('Invalid daily mood entry.');
     }
     final parsedMood = DailyMood.values.where((value) => value.name == mood);
@@ -77,6 +83,9 @@ class DailyMoodEntry {
       dateKey: date,
       mood: parsedMood.first,
       compliment: compliment,
+      recordedAt: recordedAt == null
+          ? null
+          : DateTime.parse(recordedAt as String),
     );
   }
 }

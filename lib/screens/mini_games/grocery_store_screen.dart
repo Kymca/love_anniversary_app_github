@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/grocery_catalog.dart';
 import '../../services/grocery_wallet.dart';
+import '../../services/duck_ownership_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/duck_painter.dart';
 import '../../widgets/duck_sprite.dart';
@@ -21,6 +22,8 @@ class GroceryStoreScreen extends StatefulWidget {
     this.wallet,
     this.duckAppearance = const DuckAppearance(),
     this.catalogSeed,
+    this.canWork = true,
+    this.ownershipRepository,
   });
 
   static const inventoryKey = 'tamagotchi_grocery_inventory';
@@ -30,6 +33,8 @@ class GroceryStoreScreen extends StatefulWidget {
   final GroceryWallet? wallet;
   final DuckAppearance duckAppearance;
   final int? catalogSeed;
+  final bool canWork;
+  final DuckOwnershipService? ownershipRepository;
 
   static List<String> normalizeInventory(List<String> inventory) =>
       inventory.map((id) => id == _legacyCrumbsItemId ? 'crumbs' : id).toList();
@@ -388,31 +393,35 @@ class _GroceryStoreScreenState extends State<GroceryStoreScreen>
         backgroundColor: Colors.transparent,
         foregroundColor: const Color(0xFF315D58),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
+          preferredSize: Size.fromHeight(widget.canWork ? 56 : 0),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-            child: SegmentedButton<bool>(
-              key: const ValueKey('grocery-store-work-switch'),
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment<bool>(
-                  value: false,
-                  icon: const Icon(Icons.shopping_basket_rounded),
-                  label: Text(strings.groceryStoreTab),
-                ),
-                ButtonSegment<bool>(
-                  value: true,
-                  icon: const Icon(Icons.inventory_2_rounded),
-                  label: Text(strings.groceryWorkTab),
-                ),
-              ],
-              selected: {_workMode},
-              onSelectionChanged: (selection) {
-                if (selection.isNotEmpty) {
-                  setState(() => _workMode = selection.first);
-                }
-              },
-            ),
+            padding: widget.canWork
+                ? const EdgeInsets.fromLTRB(20, 0, 20, 10)
+                : EdgeInsets.zero,
+            child: widget.canWork
+                ? SegmentedButton<bool>(
+                    key: const ValueKey('grocery-store-work-switch'),
+                    showSelectedIcon: false,
+                    segments: [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: const Icon(Icons.shopping_basket_rounded),
+                        label: Text(strings.groceryStoreTab),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: const Icon(Icons.inventory_2_rounded),
+                        label: Text(strings.groceryWorkTab),
+                      ),
+                    ],
+                    selected: {_workMode},
+                    onSelectionChanged: (selection) {
+                      if (selection.isNotEmpty) {
+                        setState(() => _workMode = selection.first);
+                      }
+                    },
+                  )
+                : const SizedBox.shrink(),
           ),
         ),
       ),
@@ -421,6 +430,7 @@ class _GroceryStoreScreenState extends State<GroceryStoreScreen>
           child: _workMode
               ? WarehouseWorkScreen(
                   wallet: _wallet,
+                  ownershipRepository: widget.ownershipRepository,
                   embedded: true,
                   onReturnToStore: () => setState(() => _workMode = false),
                 )

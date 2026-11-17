@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../l10n/generated/app_localizations.dart';
 import '../../services/grocery_wallet.dart';
+import '../../services/duck_ownership_repository.dart';
 import '../../services/warehouse_work_repository.dart';
 import '../../theme/app_theme.dart';
 import 'warehouse_game_engine.dart';
@@ -14,6 +15,7 @@ class WarehouseWorkScreen extends StatefulWidget {
   const WarehouseWorkScreen({
     super.key,
     this.repository,
+    this.ownershipRepository,
     this.wallet,
     this.clock,
     this.embedded = false,
@@ -21,6 +23,7 @@ class WarehouseWorkScreen extends StatefulWidget {
   }) : assert(!embedded || onReturnToStore != null);
 
   final WarehouseWorkRepository? repository;
+  final DuckOwnershipService? ownershipRepository;
   final GroceryWallet? wallet;
   final DateTime Function()? clock;
   final bool embedded;
@@ -33,7 +36,8 @@ class WarehouseWorkScreen extends StatefulWidget {
 class _WarehouseWorkScreenState extends State<WarehouseWorkScreen>
     with SingleTickerProviderStateMixin {
   late final WarehouseWorkRepository _repository =
-      widget.repository ?? WarehouseWorkRepository();
+      widget.repository ??
+      WarehouseWorkRepository(ownershipRepository: widget.ownershipRepository);
   GroceryWallet? _wallet;
   WarehouseWorkState? _workState;
   WarehouseGameEngine? _engine;
@@ -585,7 +589,13 @@ class _WarehouseGameScene extends StatelessWidget {
       'assets/images/warehouse/warehouse_pallet_jack.png';
   static const _platform =
       'assets/images/warehouse/warehouse_catch_platform.png';
-  static const _boxSheet = 'assets/images/warehouse/warehouse_box_variants.png';
+  static const _boxSprites = [
+    'assets/images/warehouse/warehouse_box_1.png',
+    'assets/images/warehouse/warehouse_box_2.png',
+    'assets/images/warehouse/warehouse_box_3.png',
+    'assets/images/warehouse/warehouse_box_4.png',
+    'assets/images/warehouse/warehouse_box_5.png',
+  ];
 
   @override
   Widget build(BuildContext context) => Center(
@@ -593,7 +603,8 @@ class _WarehouseGameScene extends StatelessWidget {
       key: const ValueKey('warehouse-stage-aspect'),
       aspectRatio: 4 / 3,
       child: DecoratedBox(
-        position: DecorationPosition.foreground,
+        key: const ValueKey('warehouse-scene-frame'),
+        position: DecorationPosition.background,
         decoration: BoxDecoration(
           color: const Color(0xFF342F2A),
           border: Border.all(color: const Color(0xFF4A3A2D), width: 4),
@@ -695,28 +706,12 @@ class _WarehouseGameScene extends StatelessWidget {
       key: ValueKey('warehouse-box-${box.id}'),
       left: box.x * sceneSize.width - boxSize / 2,
       top: box.y * sceneSize.height - boxSize / 2,
-      width: boxSize + 3 * scale,
-      height: boxSize + 3 * scale,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 3 * scale,
-            top: 3 * scale,
-            width: boxSize,
-            height: boxSize,
-            child: const ColoredBox(color: Color(0x55271B13)),
-          ),
-          Positioned(
-            width: boxSize,
-            height: boxSize,
-            child: _BoxSprite(
-              frame: box.variant,
-              sheetAsset: _boxSheet,
-              scale: scale * perspectiveScale,
-            ),
-          ),
-        ],
+      width: boxSize,
+      height: boxSize,
+      child: _BoxSprite(
+        frame: box.variant,
+        asset: _boxSprites[box.variant],
+        scale: scale * perspectiveScale,
       ),
     );
   }
@@ -725,23 +720,23 @@ class _WarehouseGameScene extends StatelessWidget {
 class _BoxSprite extends StatelessWidget {
   const _BoxSprite({
     required this.frame,
-    required this.sheetAsset,
+    required this.asset,
     required this.scale,
   });
 
   final int frame;
-  final String sheetAsset;
+  final String asset;
   final double scale;
 
   @override
   Widget build(BuildContext context) => ClipRect(
-    child: Align(
-      alignment: Alignment(-1 + 2 * frame / 3, 0),
-      widthFactor: 0.25,
+    child: Transform.scale(
+      scale: 1.25,
       child: Image.asset(
-        sheetAsset,
-        width: 128 * scale,
+        asset,
+        width: 32 * scale,
         height: 32 * scale,
+        fit: BoxFit.fill,
         key: ValueKey('warehouse-box-sprite-$frame'),
         filterQuality: FilterQuality.none,
         errorBuilder: (_, _, _) =>

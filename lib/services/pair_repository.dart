@@ -8,8 +8,8 @@ import '../models/pair_room.dart';
 abstract interface class PairRepository {
   Future<PairRoom> createPair(String name);
   Future<PairRoom> joinPair(String name, String code);
-  Future<PairRoom?> findPair(String code);
   Future<PairRoom?> loadActivePair();
+  Future<void> deletePair(PairRoom room);
 }
 
 class InMemoryPairRepository implements PairRepository {
@@ -65,8 +65,13 @@ class InMemoryPairRepository implements PairRepository {
     return updated;
   }
 
-  @override
   Future<PairRoom?> findPair(String code) async => _rooms[code];
+
+  @override
+  Future<void> deletePair(PairRoom room) async {
+    _rooms.remove(room.code);
+    if (_activeRoomCode == room.code) _activeRoomCode = null;
+  }
 
   @override
   Future<PairRoom?> loadActivePair() async {
@@ -149,7 +154,6 @@ class SharedPreferencesPairRepository implements PairRepository {
     return updated;
   }
 
-  @override
   Future<PairRoom?> findPair(String code) async => (await _loadMap())[code];
 
   @override
@@ -157,6 +161,17 @@ class SharedPreferencesPairRepository implements PairRepository {
     final prefs = preferences ?? await SharedPreferences.getInstance();
     final code = prefs.getString(activePairKey);
     return code == null ? null : findPair(code);
+  }
+
+  @override
+  Future<void> deletePair(PairRoom room) async {
+    final rooms = await _loadMap();
+    rooms.remove(room.code);
+    await _save(rooms);
+    final prefs = preferences ?? await SharedPreferences.getInstance();
+    if (prefs.getString(activePairKey) == room.code) {
+      await prefs.remove(activePairKey);
+    }
   }
 
   Future<Map<String, PairRoom>> _loadMap() async {

@@ -5,6 +5,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 
 import '../models/coupon.dart';
+import '../services/app_sound_service.dart';
 import '../services/coupon_repository.dart';
 import '../services/telegram_coupon_notifier.dart';
 import '../theme/app_theme.dart';
@@ -19,12 +20,16 @@ class CouponsScreen extends StatefulWidget {
     this.repositoryFactory,
     this.notifier,
     this.onActivated,
+    this.pairRevision = 0,
+    this.isActive = true,
   });
 
   final CouponRepository? repository;
   final Future<CouponRepository> Function()? repositoryFactory;
   final CouponActivationNotifier? notifier;
   final CouponActivatedCallback? onActivated;
+  final int pairRevision;
+  final bool isActive;
 
   @override
   State<CouponsScreen> createState() => _CouponsScreenState();
@@ -41,21 +46,117 @@ class _CouponsScreenState extends State<CouponsScreen>
   late Future<List<Coupon>> _couponsFuture;
   List<Coupon> _coupons = const [];
   final Set<String> _activatingIds = {};
-  late DateTime _observedMonth;
+  late DateTime _observedDate;
   Timer? _calendarTimer;
+  StreamSubscription<Coupon>? _partnerActivationSubscription;
+  int _subscriptionGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _observedMonth = DateTime.now();
+    final now = DateTime.now();
+    _observedDate = DateTime(now.year, now.month, now.day);
     _repositoryFuture = widget.repositoryFactory == null
         ? Future.value(_repository)
         : widget.repositoryFactory!();
     _couponsFuture = _loadCoupons();
+    if (widget.isActive) _startCalendarTimer();
+    _watchPartnerActivations();
+  }
+
+  @override
+  void didUpdateWidget(covariant CouponsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _startCalendarTimer();
+        _retryLoad();
+      } else {
+        _calendarTimer?.cancel();
+        _calendarTimer = null;
+      }
+    }
+    if (widget.pairRevision != oldWidget.pairRevision) {
+      _retryLoad();
+    }
+  }
+
+  void _startCalendarTimer() {
+    _calendarTimer?.cancel();
+    if (!widget.isActive) return;
     _calendarTimer = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => _checkCalendarMonth(),
+      (_) => _checkCalendarDate(),
     );
+  }
+
+  Future<void> _watchPartnerActivations() async {
+    final generation = ++_subscriptionGeneration;
+    await _partnerActivationSubscription?.cancel();
+    try {
+      final repository = await _repositoryFuture;
+      if (!mounted ||
+          generation != _subscriptionGeneration ||
+          repository is! PairCouponRepository) {
+        return;
+      }
+      _partnerActivationSubscription = repository
+          .watchPartnerActivations()
+          .listen(
+            (_) {
+              unawaited(
+                AppSoundService.play(AppSoundEvent.partnerCouponActivated),
+              );
+              _reloadCoupons();
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              FlutterError.reportError(
+                FlutterErrorDetails(
+                  exception: error,
+                  stack: stackTrace,
+                  library: 'pair coupon realtime',
+                  context: ErrorDescription(
+                    'while watching partner coupon activations',
+                  ),
+                ),
+              );
+              if (mounted) {
+                _showMessage(AppLocalizations.of(context)!.couponLoadError);
+              }
+            },
+          );
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'pair coupon realtime',
+          context: ErrorDescription('while subscribing to coupon changes'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _reloadCoupons() async {
+    try {
+      final coupons = await (await _repositoryFuture).load();
+      if (mounted) {
+        setState(() {
+          _coupons = coupons;
+          _couponsFuture = Future.value(coupons);
+        });
+      }
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'pair coupon repository',
+          context: ErrorDescription('while refreshing shared coupons'),
+        ),
+      );
+      if (mounted) _showMessage(AppLocalizations.of(context)!.couponLoadError);
+    }
   }
 
   Future<List<Coupon>> _loadCoupons() async {
@@ -72,18 +173,38 @@ class _CouponsScreenState extends State<CouponsScreen>
       }
       _couponsFuture = _loadCoupons();
     });
+    _watchPartnerActivations();
   }
 
-  Future<void> _checkCalendarMonth() async {
+  Future<void> _checkCalendarDate() async {
     final strings = AppLocalizations.of(context)!;
     final now = DateTime.now();
-    if (now.year == _observedMonth.year && now.month == _observedMonth.month) {
+    if (now.year == _observedDate.year &&
+        now.month == _observedDate.month &&
+        now.day == _observedDate.day) {
       return;
     }
-    _observedMonth = now;
+    final previousDate = _observedDate;
+    _observedDate = DateTime(now.year, now.month, now.day);
     try {
       final coupons = await (await _repositoryFuture).load(now: now);
-      if (mounted) setState(() => _coupons = coupons);
+      if (!mounted) return;
+      final previousEligibility = {
+        for (final coupon in _coupons)
+          coupon.id: coupon.isEligibleAt(previousDate),
+      };
+      final becameAvailable = coupons.any(
+        (coupon) =>
+            coupon.isEligibleAt(now) &&
+            previousEligibility[coupon.id] != true,
+      );
+      setState(() {
+        _coupons = coupons;
+        _couponsFuture = Future.value(coupons);
+      });
+      if (becameAvailable) {
+        unawaited(AppSoundService.play(AppSoundEvent.couponAvailable));
+      }
     } catch (_) {
       if (mounted) _showMessage(strings.couponLoadError);
     }
@@ -144,7 +265,9 @@ class _CouponsScreenState extends State<CouponsScreen>
 
   @override
   void dispose() {
+    _subscriptionGeneration++;
     _calendarTimer?.cancel();
+    _partnerActivationSubscription?.cancel();
     _confettiController.dispose();
     super.dispose();
   }

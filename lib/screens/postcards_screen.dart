@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../models/postcard.dart';
+import '../services/app_sound_service.dart';
 import '../services/postcard_delivery_gateway.dart';
-import '../services/lan_postcard_config.dart';
-import '../services/lan_postcard_gateway.dart';
 import '../services/postcard_push_gateway.dart';
-import '../services/participant_profile_repository.dart';
 import '../services/postcard_repository.dart';
 import '../theme/app_theme.dart';
 
@@ -18,11 +16,13 @@ class PostcardsScreen extends StatefulWidget {
     this.repository,
     this.deliveryGateway,
     this.pushGateway,
+    this.isActive = true,
   });
 
   final PostcardRepository? repository;
   final PostcardDeliveryGateway? deliveryGateway;
   final PostcardPushGateway? pushGateway;
+  final bool isActive;
 
   @override
   State<PostcardsScreen> createState() => _PostcardsScreenState();
@@ -33,78 +33,52 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
       widget.repository ?? PostcardRepository();
   late Future<List<Postcard>> _postcards = _repository.load();
   PostcardDeliveryGateway? _gateway;
-  LanPostcardConfig? _lanConfig;
   StreamSubscription<String>? _incomingSubscription;
   PostcardDirection? _filter;
   bool _isRefreshing = false;
-  bool _hasConfigError = false;
 
   @override
   void initState() {
     super.initState();
     _gateway = widget.deliveryGateway;
-    if (_gateway == null) unawaited(_loadLanConfig());
-    if (_gateway != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    _startDeliveryUpdates();
+  }
+
+  @override
+  void didUpdateWidget(covariant PostcardsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive == oldWidget.isActive) return;
+    if (widget.isActive) {
+      unawaited(_refreshInbox(showError: false));
+    }
+  }
+
+  void _startDeliveryUpdates() {
+    final gateway = _gateway;
+    if (gateway == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) {
         unawaited(_refreshInbox(showError: false));
-      });
-    }
-    final pushGateway = widget.pushGateway;
-    if (_gateway != null && pushGateway != null) {
-      _incomingSubscription = pushGateway.receivedPostcardIds.listen(
-        (postcardId) => unawaited(_loadReceivedPostcard(postcardId)),
-        onError: (Object error, StackTrace stackTrace) {
-          _showIncomingError();
-        },
-      );
-    }
-  }
-
-  Future<void> _loadLanConfig() async {
-    try {
-      final config = await LanPostcardConfig.load();
-      if (!mounted) return;
-      if (config != null) await _applyLanConfig(config, save: false);
-    } catch (error) {
-      if (mounted) setState(() => _hasConfigError = true);
-    } finally {
-      if (mounted) setState(() {});
-    }
-  }
-
-  Future<void> _applyLanConfig(
-    LanPostcardConfig config, {
-    required bool save,
-  }) async {
-    config.validate();
-    if (save) await config.save();
-    final names = await ParticipantProfileRepository().loadNames();
-    final senderName = names[config.side] ?? '';
-    if (!mounted) return;
-    setState(() {
-      _lanConfig = config;
-      _hasConfigError = false;
-      _gateway = LanPostcardGateway(config: config, senderName: senderName);
+      }
     });
-    await _refreshInbox(showError: false);
-  }
-
-  Future<void> _configureLanServer() async {
-    final strings = AppLocalizations.of(context)!;
-    final config = await showDialog<LanPostcardConfig>(
-      context: context,
-      builder: (context) =>
-          _LanConnectionDialog(strings: strings, initialConfig: _lanConfig),
+    final pushGateway = widget.pushGateway;
+    if (pushGateway == null || _incomingSubscription != null) return;
+    _incomingSubscription = pushGateway.receivedPostcardIds.listen(
+      (postcardId) => unawaited(_loadReceivedPostcard(postcardId)),
+      onError: (Object error, StackTrace stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'postcard realtime',
+            context: ErrorDescription(
+              'while listening for incoming postcard signals',
+            ),
+          ),
+        );
+        _showIncomingError();
+      },
     );
-    if (config == null || !mounted) return;
-    try {
-      await _applyLanConfig(config, save: true);
-      if (mounted) _showMessage(strings.postcardLanSaved);
-    } on FormatException catch (error) {
-      if (mounted) _showMessage(error.message);
-    } catch (error) {
-      if (mounted) _showMessage(error.toString());
-    }
   }
 
   Future<void> _refreshInbox({bool showError = true}) async {
@@ -120,9 +94,19 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
       setState(() {
         _postcards = _repository.load();
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'postcard delivery',
+          context: ErrorDescription('while refreshing the postcard inbox'),
+        ),
+      );
       if (showError && mounted) {
-        _showMessage(AppLocalizations.of(context)!.postcardLanRefreshFailed);
+        _showMessage(
+          AppLocalizations.of(context)!.postcardBackendRefreshFailed,
+        );
       }
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
@@ -139,10 +123,19 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
       }
       await _repository.recordReceived(postcard);
       if (!mounted) return;
+      unawaited(AppSoundService.play(AppSoundEvent.postcardReceived));
       setState(() {
         _postcards = _repository.load();
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'postcard delivery',
+          context: ErrorDescription('while loading an incoming postcard'),
+        ),
+      );
       _showIncomingError();
     }
   }
@@ -230,16 +223,8 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
                       ),
                     ),
                     IconButton(
-                      key: const ValueKey('postcard-lan-settings'),
-                      tooltip: strings.postcardLanSettings,
-                      onPressed: widget.deliveryGateway == null
-                          ? _configureLanServer
-                          : null,
-                      icon: const Icon(Icons.settings_ethernet_rounded),
-                    ),
-                    IconButton(
                       key: const ValueKey('postcard-refresh-inbox'),
-                      tooltip: strings.postcardLanUpdate,
+                      tooltip: strings.postcardRefreshInbox,
                       onPressed: _gateway == null || _isRefreshing
                           ? null
                           : _refreshInbox,
@@ -261,10 +246,8 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
                 const SizedBox(height: 14),
                 _PushUnavailableNotice(
                   text: _gateway == null
-                      ? _hasConfigError
-                            ? strings.postcardLanRefreshFailed
-                            : strings.postcardPushUnavailable
-                      : strings.postcardLanConfigured,
+                      ? strings.postcardPushUnavailable
+                      : strings.postcardBackendConfigured,
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -311,123 +294,6 @@ class _PostcardsScreenState extends State<PostcardsScreen> {
       ),
     );
   }
-}
-
-class _LanConnectionDialog extends StatefulWidget {
-  const _LanConnectionDialog({
-    required this.strings,
-    required this.initialConfig,
-  });
-
-  final AppLocalizations strings;
-  final LanPostcardConfig? initialConfig;
-
-  @override
-  State<_LanConnectionDialog> createState() => _LanConnectionDialogState();
-}
-
-class _LanConnectionDialogState extends State<_LanConnectionDialog> {
-  late final _urlController = TextEditingController(
-    text: widget.initialConfig?.baseUrl ?? '',
-  );
-  late final _tokenController = TextEditingController(
-    text: widget.initialConfig?.token ?? '',
-  );
-  late String _side = widget.initialConfig?.side ?? 'first';
-  String? _error;
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    _tokenController.dispose();
-    super.dispose();
-  }
-
-  void _save() {
-    try {
-      final config = LanPostcardConfig(
-        baseUrl: _urlController.text.trim(),
-        token: _tokenController.text.trim(),
-        side: _side,
-      );
-      config.validate();
-      Navigator.pop(context, config);
-    } on FormatException catch (error) {
-      setState(() => _error = error.message);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.strings.postcardLanSetupTitle),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            key: const ValueKey('postcard-lan-url-input'),
-            controller: _urlController,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(
-              labelText: widget.strings.postcardLanEndpoint,
-            ),
-          ),
-          TextField(
-            key: const ValueKey('postcard-lan-token-input'),
-            controller: _tokenController,
-            obscureText: true,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: widget.strings.postcardLanToken,
-            ),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _side,
-            decoration: InputDecoration(
-              labelText: widget.strings.postcardLanSide,
-            ),
-            items: [
-              DropdownMenuItem(
-                value: 'first',
-                child: Text(widget.strings.postcardLanFirst),
-              ),
-              DropdownMenuItem(
-                value: 'second',
-                child: Text(widget.strings.postcardLanSecond),
-              ),
-            ],
-            onChanged: (value) {
-              if (value != null) setState(() => _side = value);
-            },
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.strings.postcardLanHttpWarning,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-          ],
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: Text(widget.strings.cancel),
-      ),
-      FilledButton(
-        key: const ValueKey('postcard-lan-save'),
-        onPressed: _save,
-        child: Text(widget.strings.save),
-      ),
-    ],
-  );
 }
 
 class _PostcardComposerDialog extends StatefulWidget {

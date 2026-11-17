@@ -132,6 +132,95 @@ Run the test suite with `flutter test` and static analysis with
 `lib/l10n/generated`; edit the ARB files in `lib/l10n/` and regenerate them
 with `flutter gen-l10n`.
 
+### Android APK builds and in-app updates
+
+`.github/workflows/android-release.yml` builds a signed Android APK on pushes
+to `main` and on manual workflow dispatch targeting `main`. It uploads the APK
+and manifests only to the private Supabase Storage bucket
+`app-releases`; it
+does not upload APKs to GitHub Releases or Actions artifacts. The bucket must
+already exist and remain private. The workflow verifies the bucket's privacy
+before uploading. It writes immutable versioned objects
+`releases/<versionCode>/app-release.apk` and
+`releases/<versionCode>/manifest.json`, then updates
+`releases/latest.json`.
+The manifest contains `versionCode`, `sha256`, `apkObjectPath`, `versionName`,
+`packageName`, and `releaseNotes`.
+
+The owner has applied the private-bucket migration and deployed
+`app-update-check` v1. The bucket remains empty until a signed release workflow
+run uploads an APK and manifest. In GitHub **Settings → Secrets and variables
+→ Actions**, add repository
+secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`,
+`ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`,
+and `SUPABASE_SECRET_KEY` (the Supabase secret API key, prefixed `sb_secret_`).
+The workflow sends it only in the Storage `apikey` header; it does not use a
+Bearer authorization header. Do not substitute the publishable key. `SUPABASE_URL`
+is the public project URL and is fixed in the workflow, so it is not a secret.
+The Edge Function continues using Supabase's server-side
+`SUPABASE_SERVICE_ROLE_KEY` environment internally; do not add that value to
+GitHub Actions secrets, Dart defines, the app, or source control. The currently
+installed APK's signing certificate was
+confirmed to match the local Android debug keystore at
+`%USERPROFILE%\.android\debug.keystore`; use that exact keystore for
+`ANDROID_KEYSTORE_BASE64`, with its matching alias/passwords in the other
+Android secrets. Keep it private and backed up. This is a debug
+keystore, not a dedicated production key; changing signing keys later prevents
+in-place updates without reinstalling the app.
+
+The app calls the `app-update-check` Edge Function with its installed
+`versionCode` and package name. The function reads the private
+`releases/latest.json`, compares package/version, creates a five-minute signed
+URL for exactly the manifest's `apkObjectPath`, and returns `updateAvailable`
+plus the manifest fields and `downloadUrl`. The mobile app uses only the
+existing Supabase publishable key; it has no service-role credential. Function
+source, `verify_jwt = false` configuration, and private-bucket migration are
+included in this repository. The deployed v1 function was checked against the
+same bucket, manifest path, and response contract. The bucket is currently
+empty; this work has not uploaded an APK or manifest.
+
+Because this app has no user sign-in, `app-update-check` must be callable
+anonymously (for example with Edge Function JWT verification disabled). Keep
+the endpoint read-only: return update metadata and a short-lived signed URL
+for this one bucket/object only. Keep the bucket private and the service-role
+credential server-side; never expose it to the app.
+
+The current app's selected Dart sources and required app assets have been
+synced into this branch. Private `result.json`, machine-local configuration,
+and build/cache artifacts were not copied; the GitHub-only LAN postcard
+modules were preserved.
+
+Production already has the pair and shared-mood schema through older equivalent
+migrations; do not blindly reapply
+`20261114170000_allow_anonymous_pair_members` or
+`20261115100000_pair_shared_moods_and_membership_guards`. The shared-coupon
+migration `20261117235742_pair_shared_coupons` has been applied to production;
+it creates the `pair_coupon_states` table and `activate_pair_coupon` function
+used by the client. The matching migration file is included in this branch;
+do not reapply it.
+
+Push notifications remain optional and disabled: Firebase credentials and
+client Dart defines are not configured. Do not apply
+`20261117130000_pair_push_notifications` or deploy `register-push-device` and
+`push-dispatch` as part of this release.
+
+To integrate this updater into another app checkout, merge the updater service,
+function/config/migration and test, then make a surgical merge in that checkout's `lib/main.dart` to
+import and initialize `SupabaseAppUpdateService` and retain its update UI; do
+not replace the whole file. Also merge the Android package-install permission,
+FileProvider/cache path, and `MainActivity` method-channel handlers from this
+branch. Keep the existing app's package ID and Supabase project aligned with
+the release manifest/function.
+
+Android `versionCode` is `1000 + GITHUB_RUN_NUMBER`, so the first CI release
+is greater than the checked-in `pubspec.yaml` build number `1` and subsequent
+workflow runs remain monotonic. `versionName` comes from `pubspec.yaml`.
+The current package name is
+`com.example.love_anniversary_app`. The key and package name must match the
+installed APK. Android still requires the user to allow installs from this app
+and confirm installation in the system installer. This updater is separate
+from push notifications.
+
 ## Local configuration and private data
 
 Optional API values are supplied at build time with Dart defines. For local

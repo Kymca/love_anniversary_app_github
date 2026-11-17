@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -10,13 +11,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../models/daily_mood.dart';
 import '../services/grocery_wallet.dart';
+import '../services/app_sound_service.dart';
 import '../services/mood_pair_repository.dart';
+import '../services/duck_ownership_repository.dart';
+import '../services/duck_name_repository.dart';
 import '../services/pair_repository.dart';
 import '../services/participant_profile_repository.dart';
 import '../widgets/duck_painter.dart';
 import '../widgets/duck_mood.dart';
 import '../widgets/duck_sprite.dart';
 import '../widgets/mood_pair_widget.dart';
+import '../widgets/mood_envelope.dart';
 import 'duck_clothing_shop_screen.dart';
 import 'mini_games/grocery_aisle_scene.dart';
 import 'mini_games/grocery_store_screen.dart';
@@ -28,6 +33,8 @@ Future<bool> checkOverlayPermission() async {
   return FlutterOverlayWindow.isPermissionGranted();
 }
 
+bool shouldShowDuckRecall({required bool debugMode}) => debugMode;
+
 class TamagotchiScreen extends StatefulWidget {
   const TamagotchiScreen({
     super.key,
@@ -37,7 +44,10 @@ class TamagotchiScreen extends StatefulWidget {
     this.onOpenPairs,
     this.onDuckNameChanged,
     this.partnerSide = DuckPartnerSide.first,
+    this.isActive = true,
     this.moodPairRepository,
+    this.ownershipRepository,
+    this.duckNameRepository,
   });
 
   final int messengerEventId;
@@ -46,7 +56,10 @@ class TamagotchiScreen extends StatefulWidget {
   final VoidCallback? onOpenPairs;
   final ValueChanged<String?>? onDuckNameChanged;
   final DuckPartnerSide partnerSide;
+  final bool isActive;
   final MoodPairRepository? moodPairRepository;
+  final DuckOwnershipService? ownershipRepository;
+  final DuckNameRepository? duckNameRepository;
 
   static String outfitStorageKey(DuckPartnerSide side) =>
       'tamagotchi_duck_outfit_${side.name}';
@@ -57,7 +70,6 @@ class TamagotchiScreen extends StatefulWidget {
 
 class _TamagotchiScreenState extends State<TamagotchiScreen>
     with SingleTickerProviderStateMixin {
-  static const _nameKey = 'tamagotchi_name';
   static const _birthDateKey = 'tamagotchi_birth_date';
   static const _lastFedDateKey = 'tamagotchi_last_fed_date';
   static const _recentFoodIdsKey = 'tamagotchi_recent_food_ids';
@@ -70,11 +82,12 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
       widget.moodPairRepository ?? SharedPreferencesMoodPairRepository();
   late final ParticipantProfileRepository _participantProfileRepository =
       ParticipantProfileRepository();
+  late final DuckOwnershipService _ownershipRepository =
+      widget.ownershipRepository ??
+      DuckOwnershipRepository(profileRepository: _participantProfileRepository);
+  late final DuckNameRepository _duckNameRepository =
+      widget.duckNameRepository ?? SharedPreferencesDuckNameRepository();
   final _nameController = TextEditingController();
-  final _participantNameControllers = {
-    'first': TextEditingController(),
-    'second': TextEditingController(),
-  };
 
   SharedPreferences? _preferences;
   GroceryWallet? _wallet;
@@ -85,10 +98,11 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
   DailyMood? _partnerMood;
   bool _isLoading = true;
   int _petLoadGeneration = 0;
+  String? _loadError;
   bool _isPaired = false;
-  bool _needsParticipantName = false;
+  bool _isDuckOwner = false;
+  bool? _lastKnownDuckOwner;
   Map<String, String> _participantNames = const {};
-  bool _isCreatingTestPair = false;
   bool _isBlinking = false;
   bool _isOverlayEnabled = false;
   bool _isOverlayBusy = false;
@@ -105,6 +119,9 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
   );
   Timer? _timer;
   Timer? _messengerTimer;
+  StreamSubscription<String?>? _duckNameSubscription;
+  StreamSubscription<DailyPairMood>? _pairMoodSubscription;
+  String? _moodWatchDateKey;
   bool _showCouponMessage = false;
   bool _showingHelp = false;
 
@@ -127,20 +144,35 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
   @override
   void initState() {
     super.initState();
-    _loadPet();
-    _loadPartnerMood();
-    if (Platform.isAndroid) _refreshOverlayStatus();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      final now = DateTime.now();
-      if (mounted) setState(() => _now = now);
+    if (widget.isActive) {
+      _loadPet();
       _loadPartnerMood();
-    });
+      _watchPartnerMood();
+      _startClock();
+      if (Platform.isAndroid) _refreshOverlayStatus();
+    }
   }
 
   @override
   void didUpdateWidget(covariant TamagotchiScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.pairRevision != oldWidget.pairRevision) {
+    if (widget.isActive != oldWidget.isActive) {
+      if (widget.isActive) {
+        _now = DateTime.now();
+        _loadPet();
+        _loadPartnerMood();
+        _watchPartnerMood();
+        _startClock();
+        if (Platform.isAndroid) _refreshOverlayStatus();
+      } else {
+        _timer?.cancel();
+        _blinkClock.stop();
+        _pairMoodSubscription?.cancel();
+        _pairMoodSubscription = null;
+        _moodWatchDateKey = null;
+      }
+    } else if (widget.isActive &&
+        widget.pairRevision != oldWidget.pairRevision) {
       _loadPet();
     }
     if (widget.partnerSide != oldWidget.partnerSide) {
@@ -155,12 +187,27 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                 : null) ??
             [];
       }
-      _loadPartnerMood();
-      _loadPet();
+      if (widget.isActive) {
+        _loadPartnerMood();
+        _watchPartnerMood();
+        _loadPet();
+      }
     }
     if (widget.messengerEventId != oldWidget.messengerEventId) {
       _showCouponMessenger();
     }
+  }
+
+  void _startClock() {
+    _timer?.cancel();
+    if (!widget.isActive) return;
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      final now = DateTime.now();
+      if (mounted) setState(() => _now = now);
+      _loadPartnerMood();
+      _watchPartnerMood();
+      _refreshDuckOwnership();
+    });
   }
 
   Future<void> _loadPartnerMood() async {
@@ -174,6 +221,60 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
         setState(() => _partnerMood = null);
       }
     }
+  }
+
+  void _watchPartnerMood() {
+    if (!widget.isActive) return;
+    final dateKey = moodDateKey(_now);
+    if (_moodWatchDateKey == dateKey) return;
+    _moodWatchDateKey = dateKey;
+    _pairMoodSubscription?.cancel();
+    _pairMoodSubscription = _moodPairRepository
+        .watchFor(_now)
+        .listen(
+          (pairMood) {
+            if (!mounted) return;
+            final mood = duckPartnerMoodForSide(
+              pairMood.moods,
+              widget.partnerSide,
+            );
+            if (_partnerMood != mood) setState(() => _partnerMood = mood);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (mounted && _partnerMood != null) {
+              setState(() => _partnerMood = null);
+            }
+          },
+        );
+  }
+
+  Future<void> _refreshDuckOwnership() async {
+    try {
+      final isOwner = await _ownershipRepository.isCurrentParticipantOwner(
+        DateTime.now(),
+      );
+      final previousOwnerState = _lastKnownDuckOwner;
+      _lastKnownDuckOwner = isOwner;
+      if (mounted && previousOwnerState == false && isOwner) {
+        unawaited(AppSoundService.play(AppSoundEvent.duckArrived));
+      }
+      if (mounted && isOwner != _isDuckOwner) {
+        setState(() => _isDuckOwner = isOwner);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _loadError = AppLocalizations.of(context)!.backendConnectionError,
+        );
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showCouponMessenger() {
@@ -245,109 +346,125 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
 
   Future<void> _loadPet() async {
     final loadGeneration = ++_petLoadGeneration;
-    final outfitSide = widget.partnerSide;
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted || loadGeneration != _petLoadGeneration) return;
-    final activePair = await _pairRepository.loadActivePair();
-    if (!mounted || loadGeneration != _petLoadGeneration) return;
-    final participantNames = await _participantProfileRepository.loadNames(
-      pair: activePair,
-    );
-    if (!mounted || loadGeneration != _petLoadGeneration) return;
-    final currentParticipantName = participantNames[widget.partnerSide.name];
-    if (currentParticipantName == null) {
-      for (final entry in participantNames.entries) {
-        final controller = _participantNameControllers[entry.key]!;
-        if (controller.text.isEmpty) controller.text = entry.value;
-      }
-      _blinkClock.stop();
+    if (mounted) {
       setState(() {
-        _preferences = preferences;
-        _participantNames = participantNames;
-        _isPaired = activePair != null;
-        _needsParticipantName = true;
-        _isLoading = false;
+        _isLoading = true;
+        _loadError = null;
       });
-      widget.onDuckNameChanged?.call(null);
-      return;
     }
-    if (activePair == null) {
-      _blinkClock.stop();
-      setState(() {
-        _preferences = preferences;
-        _participantNames = participantNames;
-        _isPaired = false;
-        _needsParticipantName = false;
-        _isLoading = false;
-      });
-      widget.onDuckNameChanged?.call(null);
-      return;
-    }
-    final wallet = await GroceryWallet.open(preferences: preferences);
-    if (!mounted || loadGeneration != _petLoadGeneration) return;
-    final defaultDuckName = AppLocalizations.of(context)!.defaultDuckName;
-    final today = _dateOnly(DateTime.now());
-    final birthTimestamp = preferences.getInt(_birthDateKey);
-    final lastFedTimestamp = preferences.getInt(_lastFedDateKey);
-    final savedInventory =
-        preferences.getStringList(GroceryStoreScreen.inventoryKey) ?? [];
-    final migratedInventory = GroceryStoreScreen.normalizeInventory(
-      savedInventory,
-    );
-    if (savedInventory.contains('bread')) {
-      await preferences.setStringList(
-        GroceryStoreScreen.inventoryKey,
-        migratedInventory,
+    try {
+      final outfitSide = widget.partnerSide;
+      final preferences = await SharedPreferences.getInstance();
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      final activePair = await _pairRepository.loadActivePair();
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      final participantNames = await _participantProfileRepository.loadNames(
+        pair: activePair,
       );
-    }
-    final equippedItems = await _loadOutfit(preferences, outfitSide);
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      final currentParticipantName = participantNames[widget.partnerSide.name];
+      if (activePair == null || currentParticipantName == null) {
+        _blinkClock.stop();
+        setState(() {
+          _preferences = preferences;
+          _participantNames = participantNames;
+          _isPaired = false;
+          _lastKnownDuckOwner = null;
+          _isLoading = false;
+        });
+        widget.onDuckNameChanged?.call(null);
+        return;
+      }
+      final wallet = await GroceryWallet.open(preferences: preferences);
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      final defaultDuckName = AppLocalizations.of(context)!.defaultDuckName;
+      final today = _dateOnly(DateTime.now());
+      final birthTimestamp = preferences.getInt(_birthDateKey);
+      final lastFedTimestamp = preferences.getInt(_lastFedDateKey);
+      final savedInventory =
+          preferences.getStringList(GroceryStoreScreen.inventoryKey) ?? [];
+      final migratedInventory = GroceryStoreScreen.normalizeInventory(
+        savedInventory,
+      );
+      if (savedInventory.contains('bread')) {
+        await preferences.setStringList(
+          GroceryStoreScreen.inventoryKey,
+          migratedInventory,
+        );
+      }
+      final equippedItems = await _loadOutfit(preferences, outfitSide);
+      final isDuckOwner = await _ownershipRepository.isCurrentParticipantOwner(
+        DateTime.now(),
+      );
 
-    if (birthTimestamp == null || lastFedTimestamp == null) {
-      await preferences.setString(_nameKey, defaultDuckName);
-      await preferences.setInt(_birthDateKey, today.millisecondsSinceEpoch);
-      await preferences.setInt(_lastFedDateKey, today.millisecondsSinceEpoch);
-    }
+      if (birthTimestamp == null || lastFedTimestamp == null) {
+        await preferences.setInt(_birthDateKey, today.millisecondsSinceEpoch);
+        await preferences.setInt(_lastFedDateKey, today.millisecondsSinceEpoch);
+      }
+      final duckName = await _duckNameRepository.loadName(activePair.id);
+      final shouldPromptForName = duckName == null
+          ? await _duckNameRepository.claimNamingPrompt(activePair.id)
+          : false;
+      await _duckNameSubscription?.cancel();
+      if (duckName == null) {
+        _duckNameSubscription = _duckNameRepository
+            .watchName(activePair.id)
+            .listen(
+              (name) {
+                if (mounted && name != null && name != _duckName) {
+                  setState(() => _duckName = name);
+                  widget.onDuckNameChanged?.call(name);
+                }
+              },
+              onError: (Object _) {
+                if (mounted) {
+                  setState(
+                    () =>
+                        _loadError = AppLocalizations.of(context)!
+                            .backendConnectionError,
+                  );
+                }
+              },
+            );
+      }
 
-    if (!mounted || loadGeneration != _petLoadGeneration) return;
-    setState(() {
-      _preferences = preferences;
-      _wallet = wallet;
-      _isPaired = true;
-      _needsParticipantName = false;
-      _participantNames = participantNames;
-      _duckName = preferences.getString(_nameKey) ?? defaultDuckName;
-      _birthDate =
-          _dateFromTimestamp(preferences.getInt(_birthDateKey)) ?? today;
-      _lastFedDate =
-          _dateFromTimestamp(preferences.getInt(_lastFedDateKey)) ?? today;
-      _groceryInventory = migratedInventory;
-      final savedFoodIds = preferences.getStringList(_recentFoodIdsKey) ?? [];
-      _recentFoodIds = savedFoodIds.length <= 2
-          ? savedFoodIds
-          : savedFoodIds.sublist(savedFoodIds.length - 2);
-      _equippedItems = equippedItems;
-      _isLoading = false;
-    });
-    _blinkClock.start();
-    widget.onDuckNameChanged?.call(_duckName);
-    if (birthTimestamp == null || lastFedTimestamp == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showNameDialog();
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      setState(() {
+        _preferences = preferences;
+        _wallet = wallet;
+        _isPaired = true;
+        _isDuckOwner = isDuckOwner;
+        _lastKnownDuckOwner = isDuckOwner;
+        _participantNames = participantNames;
+        _duckName = duckName ?? defaultDuckName;
+        _birthDate =
+            _dateFromTimestamp(preferences.getInt(_birthDateKey)) ?? today;
+        _lastFedDate =
+            _dateFromTimestamp(preferences.getInt(_lastFedDateKey)) ?? today;
+        _groceryInventory = migratedInventory;
+        final savedFoodIds = preferences.getStringList(_recentFoodIdsKey) ?? [];
+        _recentFoodIds = savedFoodIds.length <= 2
+            ? savedFoodIds
+            : savedFoodIds.sublist(savedFoodIds.length - 2);
+        _equippedItems = equippedItems;
+        _isLoading = false;
+      });
+      _blinkClock.start();
+      widget.onDuckNameChanged?.call(_duckName);
+      if (shouldPromptForName) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showNameDialog();
+        });
+      }
+    } catch (_) {
+      if (!mounted || loadGeneration != _petLoadGeneration) return;
+      setState(() {
+        _isLoading = false;
+        _isPaired = false;
+        _lastKnownDuckOwner = null;
+        _loadError = AppLocalizations.of(context)!.backendConnectionError;
       });
     }
-  }
-
-  Future<void> _saveParticipantName() async {
-    final firstName = _participantNameControllers['first']!.text.trim();
-    final secondName = _participantNameControllers['second']!.text.trim();
-    if (firstName.isEmpty || secondName.isEmpty) return;
-    await _participantProfileRepository.saveName('first', firstName);
-    await _participantProfileRepository.saveName('second', secondName);
-    if (!mounted) return;
-    for (final controller in _participantNameControllers.values) {
-      controller.clear();
-    }
-    await _loadPet();
   }
 
   Future<List<String>> _loadOutfit(
@@ -464,39 +581,40 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
     if (name == null || !mounted) return;
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return;
-    await _preferences?.setString(_nameKey, trimmedName);
+    final pair = await _pairRepository.loadActivePair();
+    String savedName;
+    try {
+      savedName = await _duckNameRepository.saveName(pair?.id, trimmedName);
+    } catch (_) {
+      if (mounted) _showMessage(strings.backendConnectionError);
+      return;
+    }
     if (mounted) {
-      setState(() => _duckName = trimmedName);
-      widget.onDuckNameChanged?.call(trimmedName);
+      setState(() => _duckName = savedName);
+      widget.onDuckNameChanged?.call(savedName);
       if (_isOverlayEnabled) {
         await FlutterOverlayWindow.updateNotification(
-          title: strings.duckNamed(trimmedName),
+          title: strings.duckNamed(savedName),
           content: strings.petSemantics,
         );
       }
     }
   }
 
-  Future<void> _createTestPair() async {
-    if (_isCreatingTestPair) return;
-    setState(() => _isCreatingTestPair = true);
-    try {
-      await _pairRepository.createPair(
-        AppLocalizations.of(context)!.testPairMemberName,
-      );
-      if (mounted) await _loadPet();
-    } catch (error) {
-      if (mounted) {
-        _showOverlayMessage(
-          AppLocalizations.of(context)!.pairCreateError(error.toString()),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isCreatingTestPair = false);
-    }
-  }
-
   Future<void> _feed(_Food food, {String? inventoryItemId}) async {
+    final strings = AppLocalizations.of(context)!;
+    try {
+      await _ownershipRepository.requireCurrentOwner(DateTime.now());
+    } on DuckNotOwnedException {
+      if (mounted) {
+        _showMessage(strings.duckNotOwnerAction);
+      }
+      return;
+    } catch (_) {
+      if (mounted) _showMessage(strings.backendConnectionError);
+      return;
+    }
+    if (!mounted) return;
     HapticFeedback.selectionClick();
     if (_recentFoodIds.length == 2 &&
         _recentFoodIds.every((id) => id == food.id)) {
@@ -505,7 +623,7 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.of(context)!.feedVarietyRequired),
+            content: Text(strings.feedVarietyRequired),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -540,10 +658,7 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!
-                .feedConfirmation(_duckName, food.foodName),
-          ),
+          content: Text(strings.feedConfirmation(_duckName, food.foodName)),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -564,6 +679,8 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
           duckName: _duckName,
           wallet: _wallet,
           duckAppearance: _duckAppearance,
+          canWork: _isDuckOwner,
+          ownershipRepository: _ownershipRepository,
         ),
       ),
     );
@@ -577,9 +694,26 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
   }
 
   Future<void> _openWarehouseWork() async {
-    await Navigator.of(context).push<void>(
+    final strings = AppLocalizations.of(context)!;
+    final navigator = Navigator.of(context);
+    try {
+      await _ownershipRepository.requireCurrentOwner(DateTime.now());
+    } on DuckNotOwnedException {
+      if (mounted) {
+        _showMessage(strings.duckNotOwnerAction);
+      }
+      return;
+    } catch (_) {
+      if (mounted) _showMessage(strings.backendConnectionError);
+      return;
+    }
+    if (!mounted) return;
+    await navigator.push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => WarehouseWorkScreen(wallet: _wallet),
+        builder: (_) => WarehouseWorkScreen(
+          wallet: _wallet,
+          ownershipRepository: _ownershipRepository,
+        ),
       ),
     );
   }
@@ -672,10 +806,9 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
     _timer?.cancel();
     _blinkClock.dispose();
     _messengerTimer?.cancel();
+    _duckNameSubscription?.cancel();
+    _pairMoodSubscription?.cancel();
     _nameController.dispose();
-    for (final controller in _participantNameControllers.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -699,67 +832,13 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
       body: AppGradientBackground(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator(color: _duckColor))
-            : _needsParticipantName
-            ? _buildParticipantNameSetup()
+            : _loadError != null
+            ? Center(child: Text(_loadError!, textAlign: TextAlign.center))
             : !_isPaired
             ? _buildPairRequired()
             : _hasRunAway
             ? _buildRunawayScreen()
             : _buildPetScreen(),
-      ),
-    );
-  }
-
-  Widget _buildParticipantNameSetup() {
-    final strings = AppLocalizations.of(context)!;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: _card(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.person_rounded, size: 44, color: _duckColor),
-                const SizedBox(height: 12),
-                Text(
-                  strings.participantNameTitle,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  strings.participantNamePrompt,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                for (final side in ['first', 'second'])
-                  TextField(
-                    key: ValueKey('participant-name-input-$side'),
-                    controller: _participantNameControllers[side],
-                    autofocus: side == 'first',
-                    maxLength: 40,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: InputDecoration(
-                      labelText: strings.participantNameLabel(
-                        side == 'first' ? 1 : 2,
-                      ),
-                      prefixIcon: const Icon(Icons.person_outline_rounded),
-                    ),
-                    onSubmitted: side == 'second'
-                        ? (_) => _saveParticipantName()
-                        : null,
-                  ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  key: const ValueKey('save-participant-name'),
-                  onPressed: _saveParticipantName,
-                  child: Text(strings.save),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -782,24 +861,16 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  strings.duckNeedsPair,
+                  strings.createPair,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 8),
-                Text(strings.pairLocalNotice, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   key: const ValueKey('duck-open-pairs'),
                   onPressed: widget.onOpenPairs,
                   icon: const Icon(Icons.favorite_rounded),
                   label: Text(strings.openPairs),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton(
-                  key: const ValueKey('duck-create-test-pair'),
-                  onPressed: _isCreatingTestPair ? null : _createTestPair,
-                  child: Text(strings.testCreatePair),
                 ),
               ],
             ),
@@ -876,7 +947,9 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                         label: Text(strings.rename),
                       ),
                       Text(
-                        strings.duckNameLocalNotice,
+                        _duckNameRepository.isSynchronized
+                            ? strings.duckNameSynchronizedNotice
+                            : strings.duckNameLocalNotice,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall
                             ?.copyWith(color: AppColors.mutedInk),
@@ -887,6 +960,8 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                 const SizedBox(height: 18),
                 MoodPairWidget(
                   repository: _moodPairRepository,
+                  participantSide: widget.partnerSide.name,
+                  isActive: widget.isActive,
                   participantNames: _participantNames,
                   onNameChanged: (names) {
                     setState(() => _participantNames = names);
@@ -1022,6 +1097,17 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                                       ),
                                     ),
                                   ),
+                                if (!_isDuckOwner && _partnerMood != null)
+                                  Positioned(
+                                    right: 34,
+                                    bottom: 10,
+                                    child: MoodIncomingEnvelope(
+                                      key: ValueKey(
+                                        'incoming-mood-${_partnerMood!.name}',
+                                      ),
+                                      mood: _partnerMood!,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -1040,6 +1126,22 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isDuckOwner
+                            ? strings.duckOwnedByYouToday
+                            : strings.duckOwnedByPartnerToday(
+                                _participantNames[widget.partnerSide ==
+                                            DuckPartnerSide.first
+                                        ? 'second'
+                                        : 'first'] ??
+                                    (widget.partnerSide == DuckPartnerSide.first
+                                        ? strings.moodParticipantTwo
+                                        : strings.moodParticipantOne),
+                              ),
+                        key: const ValueKey('daily-duck-owner-status'),
+                        textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
@@ -1139,6 +1241,16 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                         ),
                       ],
                       const SizedBox(height: 12),
+                      if (_groceryInventory.isNotEmpty) ...[
+                        Text(
+                          strings.inventoryHint,
+                          style: TextStyle(
+                            color: Colors.blueGrey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Wrap(
                         spacing: 9,
                         runSpacing: 9,
@@ -1150,23 +1262,23 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                                     strings.foodCrumbsSnack,
                                   ),
                                   _Food(
+                                    'watermelon',
+                                    strings.foodWatermelonStore,
+                                    strings.foodWatermelonStoreSnack,
+                                  ),
+                                  _Food(
                                     'worm',
                                     strings.foodWorm,
                                     strings.foodWormSnack,
                                   ),
-                                  _Food(
-                                    'watermelon',
-                                    strings.foodWatermelon,
-                                    strings.foodWatermelonSnack,
-                                  ),
                                 ]
-                                .map(
-                                  (food) => ActionChip(
+                                .map((food) {
+                                  return ActionChip(
                                     avatar: _foodAvatar(food),
-                                    label: Text(
-                                      '${food.label} (${_inventoryCount(food.id)})',
-                                    ),
-                                    onPressed: () => _feed(food),
+                                    label: Text('${food.label} (0)'),
+                                    onPressed: _isDuckOwner
+                                        ? () => _feed(food)
+                                        : null,
                                     backgroundColor: const Color(0xFFFFF8FB),
                                     side: BorderSide(
                                       color: AppColors.rose.withValues(
@@ -1177,50 +1289,50 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                                       borderRadius: BorderRadius.circular(18),
                                     ),
                                     elevation: 2,
-                                  ),
-                                )
-                                .toList(),
+                                  );
+                                })
+                                .toList(growable: false),
                       ),
-                      if (_groceryInventory.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          strings.inventoryHint,
-                          style: TextStyle(
-                            color: Colors.blueGrey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: _inventoryProducts(strings).entries
-                              .where((entry) => _inventoryCount(entry.key) > 0)
-                              .map(
-                                (entry) => ActionChip(
-                                  avatar: _foodAvatar(entry.value),
-                                  label: Text(
-                                    '${entry.value.label} ×${_inventoryCount(entry.key)}',
-                                  ),
-                                  onPressed: () => _feed(
-                                    entry.value,
-                                    inventoryItemId: entry.key,
-                                  ),
-                                  backgroundColor: const Color(0xFFFFF5E9),
-                                  side: BorderSide(
-                                    color: AppColors.peach.withValues(
-                                      alpha: 0.9,
-                                    ),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  elevation: 2,
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 9,
+                        runSpacing: 9,
+                        children: _inventoryProducts(strings).entries
+                            .map((entry) {
+                              final count = _inventoryCount(entry.key);
+                              final isStarterFood = const {
+                                'crumbs',
+                                'worm',
+                                'watermelon',
+                              }.contains(entry.key);
+                              return ActionChip(
+                                avatar: _foodAvatar(entry.value),
+                                label: Text('${entry.value.label} ×$count'),
+                                onPressed:
+                                    _isDuckOwner && (count > 0 || isStarterFood)
+                                    ? () => _feed(
+                                        entry.value,
+                                        inventoryItemId: count > 0
+                                            ? entry.key
+                                            : null,
+                                      )
+                                    : null,
+                                backgroundColor: count > 0
+                                    ? const Color(0xFFFFF5E9)
+                                    : const Color(0xFFFFF8FB),
+                                side: BorderSide(
+                                  color: count > 0
+                                      ? AppColors.peach.withValues(alpha: 0.9)
+                                      : AppColors.rose.withValues(alpha: 0.13),
                                 ),
-                              )
-                              .toList(),
-                        ),
-                      ],
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                elevation: 2,
+                              );
+                            })
+                            .toList(growable: false),
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         strings.duckWalletBalance(_wallet?.balance ?? 0),
@@ -1275,13 +1387,15 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                             child: Semantics(
                               label: strings.goToWarehouseWork,
                               button: true,
-                              onTap: _openWarehouseWork,
+                              onTap: _isDuckOwner ? _openWarehouseWork : null,
                               child: ExcludeSemantics(
                                 child: FilledButton(
                                   key: const ValueKey(
                                     'tamagotchi-warehouse-work-button',
                                   ),
-                                  onPressed: _openWarehouseWork,
+                                  onPressed: _isDuckOwner
+                                      ? _openWarehouseWork
+                                      : null,
                                   style: FilledButton.styleFrom(
                                     backgroundColor: const Color(0xFFB96842),
                                     foregroundColor: Colors.white,
@@ -1401,19 +1515,21 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                 style: TextStyle(color: Color(0xFF66817A)),
               ),
               const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _callBack,
-                icon: const Icon(Icons.favorite_rounded),
-                label: Text(strings.callDuckBack),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _duckColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 14,
+              if (shouldShowDuckRecall(debugMode: kDebugMode))
+                FilledButton.icon(
+                  key: const ValueKey('debug-call-duck-back'),
+                  onPressed: _callBack,
+                  icon: const Icon(Icons.favorite_rounded),
+                  label: Text(strings.callDuckBack),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _duckColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 14,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1441,7 +1557,7 @@ Widget _foodAvatar(_Food food) =>
     PixelGroceryProduct(productId: food.id, size: 28);
 
 Map<String, _Food> _inventoryProducts(AppLocalizations strings) => {
-  'crumbs': _Food('crumbs', strings.foodBreadCrumbs, strings.foodCrumbsSnack),
+  'crumbs': _Food('crumbs', strings.foodCrumbs, strings.foodCrumbsSnack),
   'watermelon': _Food(
     'watermelon',
     strings.foodWatermelonStore,
@@ -1449,6 +1565,10 @@ Map<String, _Food> _inventoryProducts(AppLocalizations strings) => {
   ),
   'worm': _Food('worm', strings.foodWorms, strings.foodWormSnack),
   'pizza': _Food('pizza', strings.foodPizza, strings.foodPizzaSnack),
+  'apple': _Food('apple', strings.foodApple, strings.foodApple),
+  'cheese': _Food('cheese', strings.foodCheese, strings.foodCheese),
+  'carrot': _Food('carrot', strings.foodCarrot, strings.foodCarrot),
+  'milk': _Food('milk', strings.foodMilk, strings.foodMilk),
 };
 
 class DuckPetWidget extends StatefulWidget {

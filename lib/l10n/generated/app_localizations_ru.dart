@@ -13,6 +13,26 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appTitle => 'Кохання';
 
   @override
+  String get appUpdateMessage => 'Доступно обновление';
+
+  @override
+  String get appUpdateAction => 'Обновить';
+
+  @override
+  String get appUpdateInstalling => 'Подготовка…';
+
+  @override
+  String get appUpdateDismiss => 'Позже';
+
+  @override
+  String get appUpdatePermissionHint =>
+      'Разрешите установку для этого приложения в настройках Android, затем нажмите «Обновить» ещё раз.';
+
+  @override
+  String get appUpdateFailed =>
+      'Не удалось загрузить обновление. Попробуйте позже.';
+
+  @override
   String get homeTab => 'Наша история';
 
   @override
@@ -29,6 +49,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get pairsTab => 'Пары';
+
+  @override
+  String get settingsTab => 'Настройки';
+
+  @override
+  String get settingsTitle => 'Настройки';
 
   @override
   String get rouletteTab => 'Рулетка';
@@ -69,7 +95,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get couponNotificationNotConfigured =>
-      'Внешние уведомления не настроены.';
+      'Push-уведомления на устройство партнёра пока не подключены.';
 
   @override
   String get couponActivationError => 'Не удалось сохранить активацию купона.';
@@ -126,7 +152,15 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get relationshipStarted => 'С 13 ноября 2023 года • 20:30';
+  String get anonymousSignInDisabled =>
+      'Для создания пары нужно включить анонимные входы в Supabase: Auth > Sign In / Providers > Anonymous Sign-Ins.';
+
+  @override
+  String get pairAuthUnavailable =>
+      'Не удалось выполнить вход через Supabase. Попробуйте позже.';
+
+  @override
+  String get relationshipStarted => 'С 14 ноября 2023 года';
 
   @override
   String get beginning => 'И это только начало ♥';
@@ -397,7 +431,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get tamagotchiHelpCare =>
-      'Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт — её можно позвать обратно.';
+      'Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт.';
 
   @override
   String get tamagotchiHelpFeed =>
@@ -719,19 +753,91 @@ class AppLocalizationsRu extends AppLocalizations {
   String get pairsTitle => 'Пары';
 
   @override
-  String get pairSubtitle =>
-      'Создайте локальную пару или введите код пары, уже сохранённой на этом устройстве.';
-
-  @override
-  String get pairLocalNotice =>
-      'Данные пары сохраняются только на этом устройстве. Для синхронизации с другим устройством нужен настроенный сервер.';
+  String get pairSubtitle => 'Создайте пару и передайте код второму участнику.';
 
   @override
   String get yourName => 'Ваше имя';
 
   @override
-  String get pairNameSetupRequired =>
-      'Сначала укажите своё имя в Совместном тамагочи.';
+  String get pairNameSetupRequired => 'Введите имя участника.';
+
+  @override
+  String get pairEmailAuthTitle => 'Создать аккаунт / войти по email-коду';
+
+  @override
+  String get pairEmailAuthDescription =>
+      'Подключите email-код, чтобы создать аккаунт или войти с другого устройства. Подтверждение почты не требуется для создания пары или вступления в неё.';
+
+  @override
+  String get pairEmailLabel => 'Электронная почта';
+
+  @override
+  String get pairSendEmailCode => 'Отправить код';
+
+  @override
+  String get pairEmailCodeLabel => 'Код из письма';
+
+  @override
+  String get pairConfirmEmailCode => 'Подтвердить email';
+
+  @override
+  String pairEmailVerified(Object email) {
+    return 'Почта привязана: $email';
+  }
+
+  @override
+  String get pairEmailAuthRequired =>
+      'Создавать пару и вступать в неё можно без подтверждения email, в том числе анонимно.';
+
+  @override
+  String get pairEmailOptional =>
+      'Подтверждать почту необязательно для создания пары или вступления в неё.';
+
+  @override
+  String get pairBackendUpdateRequired =>
+      'Чтобы создавать пары без обязательного email, обновите Supabase миграции.';
+
+  @override
+  String get pairEmailAuthError =>
+      'Не удалось подтвердить email. Проверьте адрес и код и попробуйте ещё раз.';
+
+  @override
+  String pairEmailSendCodeError(Object error) {
+    return 'Supabase не отправил код: $error';
+  }
+
+  @override
+  String get pairEmailRateLimitError =>
+      'Supabase временно ограничил отправку писем. Код не был отправлен. Не повторяйте запросы — дождитесь обновления лимита. Если это происходит часто, владелец проекта может настроить собственный SMTP или Send Email Hook.';
+
+  @override
+  String pairEmailVerifyCodeError(Object error) {
+    return 'Supabase не подтвердил код: $error';
+  }
+
+  @override
+  String get pairEmailAuthUnavailable =>
+      'Вход по email сейчас недоступен. Попробуйте позже.';
+
+  @override
+  String get breakPair => 'Разорвать пару';
+
+  @override
+  String get breakPairTitle => 'Разорвать пару?';
+
+  @override
+  String get breakPairWarning =>
+      'Пара и все её общие данные будут удалены без возможности восстановления. Ваш аккаунт останется активным.';
+
+  @override
+  String get breakPairConfirm => 'Удалить пару и данные';
+
+  @override
+  String get pairDeleteError => 'Не удалось удалить пару. Попробуйте ещё раз.';
+
+  @override
+  String get pairEmailNotVerified =>
+      'Почта не подтверждена. Пару всё равно можно создать или вступить в неё.';
 
   @override
   String get enterYourName => 'Введите своё имя.';
@@ -743,11 +849,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get invalidPairCode => 'Введите код пары из четырёх цифр.';
 
   @override
-  String get pairNotFound =>
-      'Пара с таким кодом не найдена на этом устройстве.';
+  String get pairNotFound => 'Пара с таким кодом не найдена.';
 
   @override
   String get pairFull => 'В этой паре уже два участника.';
+
+  @override
+  String get pairAlreadyInPair =>
+      'Вы уже состоите в паре. Откройте существующую пару вместо создания новой.';
+
+  @override
+  String get backendConnectionError =>
+      'Не удалось связаться с сервером. Проверьте подключение и повторите попытку.';
 
   @override
   String get createPair => 'Создать пару';
@@ -759,11 +872,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get joinPair => 'Присоединиться';
 
   @override
-  String get pairCodeTitle => 'Код локальной пары (тест)';
+  String get pairCodeTitle => 'Код пары';
 
   @override
   String get pairCodePrompt =>
-      'Код работает только на этом устройстве. Для подключения другого устройства нужен сервер.';
+      'Передайте этот код второму участнику, чтобы подключить его к вашей паре.';
 
   @override
   String get copy => 'Скопировать';
@@ -901,6 +1014,47 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get moodChange => 'Изменить настроение';
+
+  @override
+  String get moodChangeTitle => 'Выбери настроение';
+
+  @override
+  String moodHistoryForDate(Object date) {
+    return 'Настроение за $date';
+  }
+
+  @override
+  String get moodNoHistory => 'Для этой даты пока нет записей.';
+
+  @override
+  String get moodHistoryLatest => 'сейчас';
+
+  @override
+  String get moodHistoryTimeUnknown => 'Время не сохранено';
+
+  @override
+  String get duckOwnedByYouToday => 'Сегодня утка у вас.';
+
+  @override
+  String duckOwnedByPartnerToday(Object name) {
+    return 'Сегодня утка у участника: $name.';
+  }
+
+  @override
+  String get duckMoodEnvelopeClosed =>
+      'Настроение партнёра. Нажмите, чтобы открыть.';
+
+  @override
+  String duckMoodEnvelopeOpen(Object mood) {
+    return 'Настроение партнёра: $mood';
+  }
+
+  @override
+  String get duckNotOwnerAction =>
+      'Сегодня заботиться об утке может только её владелец.';
+
+  @override
   String get moodResponse =>
       'Пусть сегодня найдётся маленький повод позаботиться о себе и немного порадоваться.';
 
@@ -1010,6 +1164,14 @@ class AppLocalizationsRu extends AppLocalizations {
       'Имя уточки сохраняется только на этом устройстве. Синхронизация между участниками пока не подключена.';
 
   @override
+  String get duckNameSynchronizedNotice =>
+      'Имя уточки синхронизируется между участниками пары.';
+
+  @override
+  String get sharedPairSyncNotice =>
+      'Настроения синхронизируются между участниками пары.';
+
+  @override
   String get cinemaLike => 'нравится';
 
   @override
@@ -1115,47 +1277,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get postcardPushUnavailable =>
-      'LAN-сервер не настроен. Запустите сервер на ноутбуке, подключите оба телефона к той же Wi-Fi сети, затем укажите адрес и общий токен. Для получения нажмите «Обновить».';
+      'Синхронизация открыток с сервером пока не подключена.';
 
   @override
-  String get postcardLanConfigured =>
-      'LAN-сервер настроен. Телефоны должны быть в той же Wi-Fi сети, сервер на ноутбуке — запущен. Новые открытки проверяются вручную.';
+  String get postcardBackendConfigured =>
+      'Открытки синхронизируются с сервером пары, пока приложение открыто; push-уведомления не подключены.';
 
   @override
-  String get postcardLanSettings => 'Настроить LAN-сервер';
+  String get postcardRefreshInbox => 'Обновить входящие';
 
   @override
-  String get postcardLanUpdate => 'Обновить входящие';
-
-  @override
-  String get postcardLanSetupTitle => 'Подключение к серверу ноутбука';
-
-  @override
-  String get postcardLanEndpoint =>
-      'Адрес ноутбука, например http://192.168.1.5:8787';
-
-  @override
-  String get postcardLanToken => 'Общий токен пары из терминала сервера';
-
-  @override
-  String get postcardLanSide => 'Этот телефон использует сторону';
-
-  @override
-  String get postcardLanFirst => 'Участник 1';
-
-  @override
-  String get postcardLanSecond => 'Участник 2';
-
-  @override
-  String get postcardLanSaved => 'Подключение к LAN-серверу сохранено.';
-
-  @override
-  String get postcardLanHttpWarning =>
-      'Используйте только доверенную домашнюю Wi-Fi сеть: HTTP не шифрует трафик. Токен даёт доступ к открыткам пары.';
-
-  @override
-  String get postcardLanRefreshFailed =>
-      'Не удалось получить открытки с LAN-сервера. Проверьте адрес, токен, Wi-Fi и firewall.';
+  String get postcardBackendRefreshFailed =>
+      'Не удалось получить открытки с сервера. Проверьте подключение и повторите попытку.';
 
   @override
   String get postcardsEmpty => 'Пока открыток нет.';
@@ -1351,7 +1484,17 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rouletteSavedChoice => 'Вариант добавлен';
 
   @override
-  String get rouletteError => 'Не удалось сохранить варианты рулетки.';
+  String get rouletteError => 'Не удалось синхронизировать варианты рулетки.';
+
+  @override
+  String get rouletteListSwipeHint =>
+      'Листайте вбок: активные варианты и общий список';
+
+  @override
+  String get rouletteDoThis => 'Делаем';
+
+  @override
+  String get rouletteChoiceApplied => 'Выбор сохранён';
 
   @override
   String get timeCapsuleOpen => 'Можно посмотреть';

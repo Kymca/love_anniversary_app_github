@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/pair_room.dart';
 import '../services/pair_repository.dart';
 import '../services/participant_profile_repository.dart';
+import '../services/supabase_backend.dart';
 import '../l10n/generated/app_localizations.dart';
 import '../theme/app_theme.dart';
 
@@ -12,11 +14,13 @@ class PairsScreen extends StatefulWidget {
     super.key,
     this.repository,
     this.profileRepository,
+    this.profileRevision = 0,
     this.onPairUpdated,
   });
 
   final PairRepository? repository;
   final ParticipantProfileRepository? profileRepository;
+  final int profileRevision;
   final VoidCallback? onPairUpdated;
 
   @override
@@ -29,14 +33,17 @@ class _PairsScreenState extends State<PairsScreen> {
   late final ParticipantProfileRepository _profileRepository =
       widget.profileRepository ?? ParticipantProfileRepository();
   final _codeController = TextEditingController();
+  final _participantNameController = TextEditingController();
   PairRoom? _room;
   String? _participantName;
+  bool _hasEditedParticipantName = false;
   bool _isBusy = false;
   String? _error;
 
   @override
   void dispose() {
     _codeController.dispose();
+    _participantNameController.dispose();
     super.dispose();
   }
 
@@ -44,16 +51,45 @@ class _PairsScreenState extends State<PairsScreen> {
   void initState() {
     super.initState();
     _loadParticipantName();
+    _loadActivePair();
+  }
+
+  @override
+  void didUpdateWidget(covariant PairsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.profileRevision != oldWidget.profileRevision) {
+      _loadParticipantName();
+    }
   }
 
   Future<void> _loadParticipantName() async {
     final names = await _profileRepository.loadNames();
-    if (mounted) setState(() => _participantName = names['first']);
+    if (!mounted) return;
+    setState(() {
+      _participantName = names['first'];
+      if (!_hasEditedParticipantName) {
+        _participantNameController.text = names['first'] ?? '';
+      }
+    });
+  }
+
+  Future<void> _loadActivePair() async {
+    try {
+      final room = await _repository.loadActivePair();
+      if (mounted && room != null) setState(() => _room = room);
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () =>
+              _error = _pairErrorMessage(AppLocalizations.of(context)!, error),
+        );
+      }
+    }
   }
 
   Future<void> _createPair() async {
-    final name = _participantName;
-    if (name == null) {
+    final name = _participantNameController.text.trim();
+    if (name.isEmpty) {
       setState(
         () => _error = AppLocalizations.of(context)!.pairNameSetupRequired,
       );
@@ -65,12 +101,10 @@ class _PairsScreenState extends State<PairsScreen> {
   Future<void> _joinPair() async {
     final code = _codeController.text.trim();
     final names = await _profileRepository.loadNames();
-    final localRoom = await _repository.findPair(code);
-    final joiningSide = localRoom != null && localRoom.members.length == 1
-        ? 'second'
-        : 'first';
-    final name = names[joiningSide] ?? _participantName;
-    if (name == null) {
+    final name = _hasEditedParticipantName
+        ? _participantNameController.text.trim()
+        : names['second'] ?? names['first'] ?? _participantName;
+    if (name == null || name.trim().isEmpty) {
       setState(
         () => _error = AppLocalizations.of(context)!.pairNameSetupRequired,
       );
@@ -90,8 +124,19 @@ class _PairsScreenState extends State<PairsScreen> {
     });
     try {
       final room = await action();
+      final participantSide = room.members.length == 1 ? 'first' : 'second';
+      await _profileRepository.saveCurrentSide(participantSide);
+      await _profileRepository.saveName(
+        participantSide,
+        room.members[participantSide == 'first' ? 0 : 1].name,
+      );
       if (!mounted) return;
-      setState(() => _room = room);
+      setState(() {
+        _room = room;
+        _participantName =
+            room.members[participantSide == 'first' ? 0 : 1].name;
+        _participantNameController.text = _participantName!;
+      });
       widget.onPairUpdated?.call();
       if (room.members.length == 1) _showShareCode(room.code);
     } on PairRepositoryException catch (error) {
@@ -99,12 +144,16 @@ class _PairsScreenState extends State<PairsScreen> {
         final strings = AppLocalizations.of(context)!;
         setState(
           () => _error = switch (error.message) {
+            'pair_backend_migration_required' =>
+              strings.pairBackendUpdateRequired,
+            'not_authenticated' => strings.pairAuthUnavailable,
             'Введите своё имя.' => strings.enterYourName,
             'Имя должно быть короче 40 символов.' => strings.nameTooLong,
             'Введите код пары из четырёх цифр.' => strings.invalidPairCode,
-            'Пара с таким кодом не найдена на этом устройстве.' =>
-              strings.pairNotFound,
+            'Пара с таким кодом не найдена на этом устройстве.' ||
+            'Пара с таким кодом не найдена на сервере.' => strings.pairNotFound,
             'В этой паре уже два участника.' => strings.pairFull,
+            'already_in_pair' => strings.pairAlreadyInPair,
             _ => error.message,
           },
         );
@@ -113,13 +162,63 @@ class _PairsScreenState extends State<PairsScreen> {
       if (mounted) {
         setState(
           () =>
-              _error = AppLocalizations.of(context)!
-                  .pairCreateError(error.toString()),
+              _error = _pairErrorMessage(AppLocalizations.of(context)!, error),
         );
       }
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
+  }
+
+  Future<void> _deletePair() async {
+    final room = _room;
+    if (room == null) return;
+    final strings = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.breakPairTitle),
+        content: Text(strings.breakPairWarning),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(strings.breakPairConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+    try {
+      await _repository.deletePair(room);
+      if (!mounted) return;
+      setState(() => _room = null);
+      widget.onPairUpdated?.call();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = strings.pairDeleteError);
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  String _pairErrorMessage(AppLocalizations strings, Object error) {
+    final reason = error is SupabaseUnavailableException ? error.reason : error;
+    if (reason is AuthException) {
+      return reason is AuthApiException &&
+              reason.code == 'anonymous_provider_disabled'
+          ? strings.anonymousSignInDisabled
+          : strings.pairAuthUnavailable;
+    }
+    return strings.pairCreateError(error.toString());
   }
 
   Future<void> _showShareCode(String code) => showDialog<void>(
@@ -181,24 +280,28 @@ class _PairsScreenState extends State<PairsScreen> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 20),
-            Text(
-              strings.pairLocalNotice,
-              style: TextStyle(color: AppColors.mutedInk, fontSize: 12),
-            ),
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    _participantName ?? strings.pairNameSetupRequired,
+                  TextField(
                     key: const ValueKey('pair-participant-name'),
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    controller: _participantNameController,
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (value) => setState(() {
+                      _hasEditedParticipantName = true;
+                      _participantName = value.trim().isEmpty
+                          ? null
+                          : value.trim();
+                    }),
+                    decoration: InputDecoration(
+                      labelText: strings.yourName,
+                      prefixIcon: const Icon(Icons.person_outline_rounded),
+                    ),
                   ),
                   const SizedBox(height: 4),
                   FilledButton.icon(
-                    onPressed: _isBusy || _participantName == null
-                        ? null
-                        : _createPair,
+                    onPressed: _isBusy ? null : _createPair,
                     icon: const Icon(Icons.favorite_rounded),
                     label: Text(strings.createPair),
                   ),
@@ -215,9 +318,7 @@ class _PairsScreenState extends State<PairsScreen> {
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: _isBusy || _participantName == null
-                        ? null
-                        : _joinPair,
+                    onPressed: _isBusy ? null : _joinPair,
                     icon: const Icon(Icons.link_rounded),
                     label: Text(strings.joinPair),
                   ),
@@ -258,6 +359,12 @@ class _PairsScreenState extends State<PairsScreen> {
                         strings.waitingForPartner,
                         style: TextStyle(color: AppColors.mutedInk),
                       ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _isBusy ? null : _deletePair,
+                      icon: const Icon(Icons.link_off_rounded),
+                      label: Text(strings.breakPair),
+                    ),
                   ],
                 ),
               ),

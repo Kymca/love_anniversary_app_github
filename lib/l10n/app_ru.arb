@@ -1,12 +1,20 @@
 {
   "@@locale": "ru",
   "appTitle": "Кохання",
+  "appUpdateMessage": "Доступно обновление",
+  "appUpdateAction": "Обновить",
+  "appUpdateInstalling": "Подготовка…",
+  "appUpdateDismiss": "Позже",
+  "appUpdatePermissionHint": "Разрешите установку для этого приложения в настройках Android, затем нажмите «Обновить» ещё раз.",
+  "appUpdateFailed": "Не удалось загрузить обновление. Попробуйте позже.",
   "homeTab": "Наша история",
   "petTab": "Тамагочи",
   "memoriesTab": "Воспоминания",
   "couponsTab": "Купоны",
   "notesTab": "Заметки",
   "pairsTab": "Пары",
+  "settingsTab": "Настройки",
+  "settingsTitle": "Настройки",
   "rouletteTab": "Рулетка",
   "duckShortcut": "Наша уточка",
   "sendHeart": "Отправить сердечко",
@@ -19,7 +27,7 @@
   "couponRetry": "Попробовать снова",
   "couponEmptyTitle": "Пока нет купонов",
   "couponEmptyDescription": "Здесь появятся ваши желания и сюрпризы.",
-  "couponNotificationNotConfigured": "Внешние уведомления не настроены.",
+  "couponNotificationNotConfigured": "Push-уведомления на устройство партнёра пока не подключены.",
   "couponActivationError": "Не удалось сохранить активацию купона.",
   "couponScratchHint": "Проведи пальцем, чтобы стереть",
   "couponActivate": "Активировать",
@@ -37,7 +45,9 @@
   "overlayPetTapHint": "Коснитесь уточки, чтобы порадовать её",
   "pairCreateError": "Не удалось создать пару: {error}",
   "@pairCreateError": {"placeholders": {"error": {}}},
-  "relationshipStarted": "С 13 ноября 2023 года • 20:30",
+  "anonymousSignInDisabled": "Для создания пары нужно включить анонимные входы в Supabase: Auth > Sign In / Providers > Anonymous Sign-Ins.",
+  "pairAuthUnavailable": "Не удалось выполнить вход через Supabase. Попробуйте позже.",
+  "relationshipStarted": "С 14 ноября 2023 года",
   "beginning": "И это только начало ♥",
   "couponActivatedMessage": "Купон активирован! Уточка несёт тебе радость!",
   "language": "Язык",
@@ -111,7 +121,7 @@
   "feedDuck": "Угости уточку",
   "feedVarietyRequired": "Уточке нужно разнообразие — предложи ей что-нибудь другое.",
   "tamagotchiHelpTitle": "Как заботиться об уточке",
-  "tamagotchiHelpCare": "Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт — её можно позвать обратно.",
+  "tamagotchiHelpCare": "Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт.",
   "tamagotchiHelpFeed": "Нажимай на еду или продукты из магазина. Одну и ту же еду можно дать два раза подряд, но на третий раз уточка попросит разнообразия. История сохраняется.",
   "tamagotchiHelpPlay": "Нажми на уточку, чтобы поиграть и порадовать её. В гардеробе можно примерять, покупать и надевать образы.",
   "foodCrumbs": "Крошки",
@@ -223,20 +233,45 @@
   "randomMemoryLoadError": "Не получилось загрузить воспоминание. Проверьте файл экспорта чата.",
   "favoriteUpdateError": "Не удалось обновить избранное. Попробуйте ещё раз.",
   "pairsTitle": "Пары",
-  "pairSubtitle": "Создайте локальную пару или введите код пары, уже сохранённой на этом устройстве.",
-  "pairLocalNotice": "Данные пары сохраняются только на этом устройстве. Для синхронизации с другим устройством нужен настроенный сервер.",
+  "pairSubtitle": "Создайте пару и передайте код второму участнику.",
   "yourName": "Ваше имя",
-  "pairNameSetupRequired": "Сначала укажите своё имя в Совместном тамагочи.",
+  "pairNameSetupRequired": "Введите имя участника.",
+  "pairEmailAuthTitle": "Создать аккаунт / войти по email-коду",
+  "pairEmailAuthDescription": "Подключите email-код, чтобы создать аккаунт или войти с другого устройства. Подтверждение почты не требуется для создания пары или вступления в неё.",
+  "pairEmailLabel": "Электронная почта",
+  "pairSendEmailCode": "Отправить код",
+  "pairEmailCodeLabel": "Код из письма",
+  "pairConfirmEmailCode": "Подтвердить email",
+  "pairEmailVerified": "Почта привязана: {email}",
+  "@pairEmailVerified": {"placeholders": {"email": {}}},
+  "pairEmailAuthRequired": "Создавать пару и вступать в неё можно без подтверждения email, в том числе анонимно.",
+  "pairEmailOptional": "Подтверждать почту необязательно для создания пары или вступления в неё.",
+  "pairBackendUpdateRequired": "Чтобы создавать пары без обязательного email, обновите Supabase миграции.",
+  "pairEmailAuthError": "Не удалось подтвердить email. Проверьте адрес и код и попробуйте ещё раз.",
+  "pairEmailSendCodeError": "Supabase не отправил код: {error}",
+  "@pairEmailSendCodeError": {"placeholders": {"error": {}}},
+  "pairEmailRateLimitError": "Supabase временно ограничил отправку писем. Код не был отправлен. Не повторяйте запросы — дождитесь обновления лимита. Если это происходит часто, владелец проекта может настроить собственный SMTP или Send Email Hook.",
+  "pairEmailVerifyCodeError": "Supabase не подтвердил код: {error}",
+  "@pairEmailVerifyCodeError": {"placeholders": {"error": {}}},
+  "pairEmailAuthUnavailable": "Вход по email сейчас недоступен. Попробуйте позже.",
+  "breakPair": "Разорвать пару",
+  "breakPairTitle": "Разорвать пару?",
+  "breakPairWarning": "Пара и все её общие данные будут удалены без возможности восстановления. Ваш аккаунт останется активным.",
+  "breakPairConfirm": "Удалить пару и данные",
+  "pairDeleteError": "Не удалось удалить пару. Попробуйте ещё раз.",
+  "pairEmailNotVerified": "Почта не подтверждена. Пару всё равно можно создать или вступить в неё.",
   "enterYourName": "Введите своё имя.",
   "nameTooLong": "Имя должно быть короче 40 символов.",
   "invalidPairCode": "Введите код пары из четырёх цифр.",
-  "pairNotFound": "Пара с таким кодом не найдена на этом устройстве.",
+  "pairNotFound": "Пара с таким кодом не найдена.",
   "pairFull": "В этой паре уже два участника.",
+  "pairAlreadyInPair": "Вы уже состоите в паре. Откройте существующую пару вместо создания новой.",
+  "backendConnectionError": "Не удалось связаться с сервером. Проверьте подключение и повторите попытку.",
   "createPair": "Создать пару",
   "pairCode": "Код пары",
   "joinPair": "Присоединиться",
-  "pairCodeTitle": "Код локальной пары (тест)",
-  "pairCodePrompt": "Код работает только на этом устройстве. Для подключения другого устройства нужен сервер.",
+  "pairCodeTitle": "Код пары",
+  "pairCodePrompt": "Передайте этот код второму участнику, чтобы подключить его к вашей паре.",
   "copy": "Скопировать",
   "done": "Готово",
   "yourPair": "Ваша пара",
@@ -275,6 +310,20 @@
   "moodOtherReaction": "Утка напоминает: сегодня можно спросить друг друга, какая поддержка будет приятна.",
   "moodToday": "Сегодня: {mood}",
   "@moodToday": {"placeholders": {"mood": {}}},
+  "moodChange": "Изменить настроение",
+  "moodChangeTitle": "Выбери настроение",
+  "moodHistoryForDate": "Настроение за {date}",
+  "@moodHistoryForDate": {"placeholders": {"date": {}}},
+  "moodNoHistory": "Для этой даты пока нет записей.",
+  "moodHistoryLatest": "сейчас",
+  "moodHistoryTimeUnknown": "Время не сохранено",
+  "duckOwnedByYouToday": "Сегодня утка у вас.",
+  "duckOwnedByPartnerToday": "Сегодня утка у участника: {name}.",
+  "@duckOwnedByPartnerToday": {"placeholders": {"name": {}}},
+  "duckMoodEnvelopeClosed": "Настроение партнёра. Нажмите, чтобы открыть.",
+  "duckMoodEnvelopeOpen": "Настроение партнёра: {mood}",
+  "@duckMoodEnvelopeOpen": {"placeholders": {"mood": {}}},
+  "duckNotOwnerAction": "Сегодня заботиться об утке может только её владелец.",
   "moodResponse": "Пусть сегодня найдётся маленький повод позаботиться о себе и немного порадоваться.",
   "weekdayMon": "Пн",
   "weekdayTue": "Вт",
@@ -310,6 +359,8 @@
   "testCreatePair": "Создать тестовую пару (временно)",
   "testPairMemberName": "Тестовый участник",
   "duckNameLocalNotice": "Имя уточки сохраняется только на этом устройстве. Синхронизация между участниками пока не подключена.",
+  "duckNameSynchronizedNotice": "Имя уточки синхронизируется между участниками пары.",
+  "sharedPairSyncNotice": "Настроения синхронизируются между участниками пары.",
   "cinemaLike": "нравится",
   "cinemaDislike": "не нравится",
   "cinemaLocalNotice": "Демо на одном устройстве: выборы видны здесь, но не синхронизируются и не являются приватным голосованием между устройствами.",
@@ -344,19 +395,10 @@
   "postcardsTab": "Открытки",
   "postcardsTitle": "Открытки",
   "postcardsSubtitle": "Здесь хранятся действительно отправленные и полученные открытки.",
-  "postcardPushUnavailable": "LAN-сервер не настроен. Запустите сервер на ноутбуке, подключите оба телефона к той же Wi-Fi сети, затем укажите адрес и общий токен. Для получения нажмите «Обновить».",
-  "postcardLanConfigured": "LAN-сервер настроен. Телефоны должны быть в той же Wi-Fi сети, сервер на ноутбуке — запущен. Новые открытки проверяются вручную.",
-  "postcardLanSettings": "Настроить LAN-сервер",
-  "postcardLanUpdate": "Обновить входящие",
-  "postcardLanSetupTitle": "Подключение к серверу ноутбука",
-  "postcardLanEndpoint": "Адрес ноутбука, например http://192.168.1.5:8787",
-  "postcardLanToken": "Общий токен пары из терминала сервера",
-  "postcardLanSide": "Этот телефон использует сторону",
-  "postcardLanFirst": "Участник 1",
-  "postcardLanSecond": "Участник 2",
-  "postcardLanSaved": "Подключение к LAN-серверу сохранено.",
-  "postcardLanHttpWarning": "Используйте только доверенную домашнюю Wi-Fi сеть: HTTP не шифрует трафик. Токен даёт доступ к открыткам пары.",
-  "postcardLanRefreshFailed": "Не удалось получить открытки с LAN-сервера. Проверьте адрес, токен, Wi-Fi и firewall.",
+  "postcardPushUnavailable": "Синхронизация открыток с сервером пока не подключена.",
+  "postcardBackendConfigured": "Открытки синхронизируются с сервером пары, пока приложение открыто; push-уведомления не подключены.",
+  "postcardRefreshInbox": "Обновить входящие",
+  "postcardBackendRefreshFailed": "Не удалось получить открытки с сервера. Проверьте подключение и повторите попытку.",
   "postcardsEmpty": "Пока открыток нет.",
   "postcardAll": "Все",
   "postcardSentTab": "Отправленные",
@@ -424,61 +466,119 @@
   "rouletteRemoveChoice": "Удалить вариант {choice}",
   "@rouletteRemoveChoice": {"placeholders": {"choice": {}}},
   "rouletteSavedChoice": "Вариант добавлен",
-  "rouletteError": "Не удалось сохранить варианты рулетки."
-  ,"timeCapsuleOpen": "Можно посмотреть"
-  ,"timeCapsuleOpensOn": "Откроется {date}"
-  ,"newTimeCapsule": "Новая капсула времени"
-  ,"timeCapsuleNoteHint": "Записка для себя в будущем"
-  ,"attachPhoto": "Прикрепить фото"
-  ,"photoSelected": "Фото выбрано"
-  ,"openOnDate": "Открыть: {date}"
-  ,"sealCapsule": "Запечатать"
-  ,"choosePhotoError": "Не удалось выбрать фото: {error}"
-  ,"capsuleNeedsContent": "Добавьте текст или выберите фото."
-  ,"photoUnavailable": "Фото недоступно"
-  ,"rouletteFoodOptionCook": "Приготовить вместе"
-  ,"rouletteFoodOptionOrder": "Заказать любимую еду"
-  ,"rouletteFoodOptionCafe": "Сходить в кафе"
-  ,"rouletteFoodOptionPicnic": "Устроить пикник"
-  ,"rouletteFoodOptionDessert": "Испечь десерт"
-  ,"rouletteMovieOptionRomcom": "Романтическая комедия"
-  ,"rouletteMovieOptionCartoon": "Мультфильм"
-  ,"rouletteMovieOptionFavorite": "Любимый фильм"
-  ,"rouletteMovieOptionNew": "Найти что-то новое"
-  ,"rouletteMovieOptionNight": "Устроить кино-ночь"
-  ,"rouletteActivityOptionWalk": "Прогуляться вместе"
-  ,"rouletteActivityOptionBoardGame": "Сыграть в настольную игру"
-  ,"rouletteActivityOptionPhoto": "Сделать фото-прогулку"
-  ,"rouletteActivityOptionHomeDate": "Устроить домашнее свидание"
-  ,"rouletteActivityOptionMusic": "Послушать музыку"
-  ,"warehouseTitle": "Работа на складе"
-  ,"warehouseSubtitle": "Лови падающие коробки, двигая рохлю. Поймай все 15!"
-  ,"warehouseSceneSemantics": "Склад: перетаскивай пальцем, чтобы двигать рохлю и ловить коробки."
-  ,"warehouseStart": "Начать смену"
-  ,"warehouseTired": "Уточка устала. Ей нужно отдохнуть."
-  ,"warehouseCooldownRemaining": "Вернуться на работу можно через {hours} ч {minutes} мин."
-  ,"@warehouseCooldownRemaining": {"placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
-  ,"warehouseProgress": "Завершено: {caught} из {total}"
-  ,"@warehouseProgress": {"placeholders": {"caught": {"type": "int"}, "total": {"type": "int"}}}
-  ,"warehouseCaught": "Поймано: {count}"
-  ,"@warehouseCaught": {"placeholders": {"count": {"type": "int"}}}
-  ,"warehouseMissed": "Мимо: {count}"
-  ,"@warehouseMissed": {"placeholders": {"count": {"type": "int"}}}
-  ,"warehouseMoveLeft": "Двигать рохлю влево"
-  ,"warehouseMoveRight": "Двигать рохлю вправо"
-  ,"warehouseControlsHint": "Перетащи по складу или нажимай стрелки"
-  ,"warehouseResultPerfectTitle": "Отличная смена!"
-  ,"warehouseResultPartialTitle": "Хорошая работа!"
-  ,"warehouseResultFailureTitle": "Смена завершена"
-  ,"warehouseResultPerfectMessage": "Пойманы все коробки — уточка гордится тобой!"
-  ,"warehouseResultPartialMessage": "Больше половины коробок пойманы. Неплохо!"
-  ,"warehouseResultFailureMessage": "Поймано меньше половины коробок. Попробуем позже."
-  ,"warehouseReward": "Заработано: {amount} ₴"
-  ,"@warehouseReward": {"placeholders": {"amount": {"type": "int"}}}
-  ,"warehouseReturnHome": "На главную"
-  ,"warehouseRetrySave": "Повторить"
-  ,"warehouseWorkSaveError": "Не удалось сохранить смену на складе: {error}"
-  ,"@warehouseWorkSaveError": {"placeholders": {"error": {}}}
-  ,"groceryStoreTab": "Магазин"
-  ,"groceryWorkTab": "Работа"
+  "rouletteError": "Не удалось синхронизировать варианты рулетки.",
+  "rouletteListSwipeHint": "Листайте вбок: активные варианты и общий список",
+  "rouletteDoThis": "Делаем",
+  "rouletteChoiceApplied": "Выбор сохранён",
+  "timeCapsuleOpen": "Можно посмотреть"
+,
+  "timeCapsuleOpensOn": "Откроется {date}"
+,
+  "newTimeCapsule": "Новая капсула времени"
+,
+  "timeCapsuleNoteHint": "Записка для себя в будущем"
+,
+  "attachPhoto": "Прикрепить фото"
+,
+  "photoSelected": "Фото выбрано"
+,
+  "openOnDate": "Открыть: {date}"
+,
+  "sealCapsule": "Запечатать"
+,
+  "choosePhotoError": "Не удалось выбрать фото: {error}"
+,
+  "capsuleNeedsContent": "Добавьте текст или выберите фото."
+,
+  "photoUnavailable": "Фото недоступно"
+,
+  "rouletteFoodOptionCook": "Приготовить вместе"
+,
+  "rouletteFoodOptionOrder": "Заказать любимую еду"
+,
+  "rouletteFoodOptionCafe": "Сходить в кафе"
+,
+  "rouletteFoodOptionPicnic": "Устроить пикник"
+,
+  "rouletteFoodOptionDessert": "Испечь десерт"
+,
+  "rouletteMovieOptionRomcom": "Романтическая комедия"
+,
+  "rouletteMovieOptionCartoon": "Мультфильм"
+,
+  "rouletteMovieOptionFavorite": "Любимый фильм"
+,
+  "rouletteMovieOptionNew": "Найти что-то новое"
+,
+  "rouletteMovieOptionNight": "Устроить кино-ночь"
+,
+  "rouletteActivityOptionWalk": "Прогуляться вместе"
+,
+  "rouletteActivityOptionBoardGame": "Сыграть в настольную игру"
+,
+  "rouletteActivityOptionPhoto": "Сделать фото-прогулку"
+,
+  "rouletteActivityOptionHomeDate": "Устроить домашнее свидание"
+,
+  "rouletteActivityOptionMusic": "Послушать музыку"
+,
+  "warehouseTitle": "Работа на складе"
+,
+  "warehouseSubtitle": "Лови падающие коробки, двигая рохлю. Поймай все 15!"
+,
+  "warehouseSceneSemantics": "Склад: перетаскивай пальцем, чтобы двигать рохлю и ловить коробки."
+,
+  "warehouseStart": "Начать смену"
+,
+  "warehouseTired": "Уточка устала. Ей нужно отдохнуть."
+,
+  "warehouseCooldownRemaining": "Вернуться на работу можно через {hours} ч {minutes} мин."
+,
+  "@warehouseCooldownRemaining": {"placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}}
+,
+  "warehouseProgress": "Завершено: {caught} из {total}"
+,
+  "@warehouseProgress": {"placeholders": {"caught": {"type": "int"}, "total": {"type": "int"}}}
+,
+  "warehouseCaught": "Поймано: {count}"
+,
+  "@warehouseCaught": {"placeholders": {"count": {"type": "int"}}}
+,
+  "warehouseMissed": "Мимо: {count}"
+,
+  "@warehouseMissed": {"placeholders": {"count": {"type": "int"}}}
+,
+  "warehouseMoveLeft": "Двигать рохлю влево"
+,
+  "warehouseMoveRight": "Двигать рохлю вправо"
+,
+  "warehouseControlsHint": "Перетащи по складу или нажимай стрелки"
+,
+  "warehouseResultPerfectTitle": "Отличная смена!"
+,
+  "warehouseResultPartialTitle": "Хорошая работа!"
+,
+  "warehouseResultFailureTitle": "Смена завершена"
+,
+  "warehouseResultPerfectMessage": "Пойманы все коробки — уточка гордится тобой!"
+,
+  "warehouseResultPartialMessage": "Больше половины коробок пойманы. Неплохо!"
+,
+  "warehouseResultFailureMessage": "Поймано меньше половины коробок. Попробуем позже."
+,
+  "warehouseReward": "Заработано: {amount} ₴"
+,
+  "@warehouseReward": {"placeholders": {"amount": {"type": "int"}}}
+,
+  "warehouseReturnHome": "На главную"
+,
+  "warehouseRetrySave": "Повторить"
+,
+  "warehouseWorkSaveError": "Не удалось сохранить смену на складе: {error}"
+,
+  "@warehouseWorkSaveError": {"placeholders": {"error": {}}}
+,
+  "groceryStoreTab": "Магазин"
+,
+  "groceryWorkTab": "Работа"
 }

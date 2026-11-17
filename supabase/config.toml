@@ -1,0 +1,2 @@
+[functions.app-update-check]
+verify_jwt = false

@@ -5,10 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:love_anniversary_app/models/postcard.dart';
 import 'package:love_anniversary_app/screens/postcards_screen.dart';
 import 'package:love_anniversary_app/services/postcard_delivery_gateway.dart';
-import 'package:love_anniversary_app/services/lan_postcard_config.dart';
 import 'package:love_anniversary_app/services/postcard_push_gateway.dart';
 import 'package:love_anniversary_app/services/postcard_repository.dart';
-import 'package:love_anniversary_app/services/participant_profile_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
@@ -72,7 +70,12 @@ void main() {
 
     expect(find.text('Sent note'), findsOneWidget);
     expect(find.text('Received note'), findsOneWidget);
-    expect(find.textContaining('LAN-сервер не настроен'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Синхронизация открыток с сервером пока не подключена.',
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Отправленные'));
     await tester.pumpAndSettle();
     expect(find.text('Sent note'), findsOneWidget);
@@ -127,7 +130,12 @@ void main() {
     await tester.tap(find.text('Отправить'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('LAN-сервер не настроен'), findsWidgets);
+    expect(
+      find.textContaining(
+        'Синхронизация открыток с сервером пока не подключена.',
+      ),
+      findsWidgets,
+    );
     expect(await repository.load(), isEmpty);
   });
 
@@ -188,35 +196,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(await repository.load(), isEmpty);
-    expect(find.textContaining('LAN-сервер не настроен'), findsOneWidget);
-  });
-
-  testWidgets('LAN server settings are saved from the postcard screen', (
-    tester,
-  ) async {
-    final preferences = await SharedPreferences.getInstance();
-    final profiles = ParticipantProfileRepository(preferences: preferences);
-    await profiles.saveName('first', 'Alex');
-    await profiles.saveName('second', 'Sam');
-    await tester.pumpWidget(localizedTestApp(home: const PostcardsScreen()));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('postcard-lan-settings')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey('postcard-lan-url-input')),
-      'http://127.0.0.1:1/',
+    expect(
+      find.textContaining(
+        'Синхронизация открыток с сервером пока не подключена.',
+      ),
+      findsOneWidget,
     );
-    await tester.enterText(
-      find.byKey(const ValueKey('postcard-lan-token-input')),
-      '0123456789abcdefghijklmnopqrstuvwxyzABCDEFG',
-    );
-    await tester.tap(find.byKey(const ValueKey('postcard-lan-save')));
-    await tester.pumpAndSettle();
-
-    final saved = await LanPostcardConfig.load(preferences: preferences);
-    expect(saved?.baseUrl, 'http://127.0.0.1:1');
-    expect(saved?.token, '0123456789abcdefghijklmnopqrstuvwxyzABCDEFG');
-    expect(find.textContaining('LAN-сервер настроен'), findsOneWidget);
   });
 }
 

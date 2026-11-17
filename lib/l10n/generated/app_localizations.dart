@@ -104,6 +104,42 @@ abstract class AppLocalizations {
   /// **'Кохання'**
   String get appTitle;
 
+  /// No description provided for @appUpdateMessage.
+  ///
+  /// In ru, this message translates to:
+  /// **'Доступно обновление'**
+  String get appUpdateMessage;
+
+  /// No description provided for @appUpdateAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Обновить'**
+  String get appUpdateAction;
+
+  /// No description provided for @appUpdateInstalling.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подготовка…'**
+  String get appUpdateInstalling;
+
+  /// No description provided for @appUpdateDismiss.
+  ///
+  /// In ru, this message translates to:
+  /// **'Позже'**
+  String get appUpdateDismiss;
+
+  /// No description provided for @appUpdatePermissionHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Разрешите установку для этого приложения в настройках Android, затем нажмите «Обновить» ещё раз.'**
+  String get appUpdatePermissionHint;
+
+  /// No description provided for @appUpdateFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить обновление. Попробуйте позже.'**
+  String get appUpdateFailed;
+
   /// No description provided for @homeTab.
   ///
   /// In ru, this message translates to:
@@ -139,6 +175,18 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Пары'**
   String get pairsTab;
+
+  /// No description provided for @settingsTab.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настройки'**
+  String get settingsTab;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настройки'**
+  String get settingsTitle;
 
   /// No description provided for @rouletteTab.
   ///
@@ -215,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @couponNotificationNotConfigured.
   ///
   /// In ru, this message translates to:
-  /// **'Внешние уведомления не настроены.'**
+  /// **'Push-уведомления на устройство партнёра пока не подключены.'**
   String get couponNotificationNotConfigured;
 
   /// No description provided for @couponActivationError.
@@ -314,10 +362,22 @@ abstract class AppLocalizations {
   /// **'Не удалось создать пару: {error}'**
   String pairCreateError(Object error);
 
+  /// No description provided for @anonymousSignInDisabled.
+  ///
+  /// In ru, this message translates to:
+  /// **'Для создания пары нужно включить анонимные входы в Supabase: Auth > Sign In / Providers > Anonymous Sign-Ins.'**
+  String get anonymousSignInDisabled;
+
+  /// No description provided for @pairAuthUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось выполнить вход через Supabase. Попробуйте позже.'**
+  String get pairAuthUnavailable;
+
   /// No description provided for @relationshipStarted.
   ///
   /// In ru, this message translates to:
-  /// **'С 13 ноября 2023 года • 20:30'**
+  /// **'С 14 ноября 2023 года'**
   String get relationshipStarted;
 
   /// No description provided for @beginning.
@@ -677,7 +737,7 @@ abstract class AppLocalizations {
   /// No description provided for @tamagotchiHelpCare.
   ///
   /// In ru, this message translates to:
-  /// **'Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт — её можно позвать обратно.'**
+  /// **'Сытость уменьшается на 25% за каждый день без еды. Если не кормить 4 дня, уточка уйдёт.'**
   String get tamagotchiHelpCare;
 
   /// No description provided for @tamagotchiHelpFeed.
@@ -1223,14 +1283,8 @@ abstract class AppLocalizations {
   /// No description provided for @pairSubtitle.
   ///
   /// In ru, this message translates to:
-  /// **'Создайте локальную пару или введите код пары, уже сохранённой на этом устройстве.'**
+  /// **'Создайте пару и передайте код второму участнику.'**
   String get pairSubtitle;
-
-  /// No description provided for @pairLocalNotice.
-  ///
-  /// In ru, this message translates to:
-  /// **'Данные пары сохраняются только на этом устройстве. Для синхронизации с другим устройством нужен настроенный сервер.'**
-  String get pairLocalNotice;
 
   /// No description provided for @yourName.
   ///
@@ -1241,8 +1295,134 @@ abstract class AppLocalizations {
   /// No description provided for @pairNameSetupRequired.
   ///
   /// In ru, this message translates to:
-  /// **'Сначала укажите своё имя в Совместном тамагочи.'**
+  /// **'Введите имя участника.'**
   String get pairNameSetupRequired;
+
+  /// No description provided for @pairEmailAuthTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Создать аккаунт / войти по email-коду'**
+  String get pairEmailAuthTitle;
+
+  /// No description provided for @pairEmailAuthDescription.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подключите email-код, чтобы создать аккаунт или войти с другого устройства. Подтверждение почты не требуется для создания пары или вступления в неё.'**
+  String get pairEmailAuthDescription;
+
+  /// No description provided for @pairEmailLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Электронная почта'**
+  String get pairEmailLabel;
+
+  /// No description provided for @pairSendEmailCode.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отправить код'**
+  String get pairSendEmailCode;
+
+  /// No description provided for @pairEmailCodeLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Код из письма'**
+  String get pairEmailCodeLabel;
+
+  /// No description provided for @pairConfirmEmailCode.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подтвердить email'**
+  String get pairConfirmEmailCode;
+
+  /// No description provided for @pairEmailVerified.
+  ///
+  /// In ru, this message translates to:
+  /// **'Почта привязана: {email}'**
+  String pairEmailVerified(Object email);
+
+  /// No description provided for @pairEmailAuthRequired.
+  ///
+  /// In ru, this message translates to:
+  /// **'Создавать пару и вступать в неё можно без подтверждения email, в том числе анонимно.'**
+  String get pairEmailAuthRequired;
+
+  /// No description provided for @pairEmailOptional.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подтверждать почту необязательно для создания пары или вступления в неё.'**
+  String get pairEmailOptional;
+
+  /// No description provided for @pairBackendUpdateRequired.
+  ///
+  /// In ru, this message translates to:
+  /// **'Чтобы создавать пары без обязательного email, обновите Supabase миграции.'**
+  String get pairBackendUpdateRequired;
+
+  /// No description provided for @pairEmailAuthError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось подтвердить email. Проверьте адрес и код и попробуйте ещё раз.'**
+  String get pairEmailAuthError;
+
+  /// No description provided for @pairEmailSendCodeError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Supabase не отправил код: {error}'**
+  String pairEmailSendCodeError(Object error);
+
+  /// No description provided for @pairEmailRateLimitError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Supabase временно ограничил отправку писем. Код не был отправлен. Не повторяйте запросы — дождитесь обновления лимита. Если это происходит часто, владелец проекта может настроить собственный SMTP или Send Email Hook.'**
+  String get pairEmailRateLimitError;
+
+  /// No description provided for @pairEmailVerifyCodeError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Supabase не подтвердил код: {error}'**
+  String pairEmailVerifyCodeError(Object error);
+
+  /// No description provided for @pairEmailAuthUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вход по email сейчас недоступен. Попробуйте позже.'**
+  String get pairEmailAuthUnavailable;
+
+  /// No description provided for @breakPair.
+  ///
+  /// In ru, this message translates to:
+  /// **'Разорвать пару'**
+  String get breakPair;
+
+  /// No description provided for @breakPairTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Разорвать пару?'**
+  String get breakPairTitle;
+
+  /// No description provided for @breakPairWarning.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пара и все её общие данные будут удалены без возможности восстановления. Ваш аккаунт останется активным.'**
+  String get breakPairWarning;
+
+  /// No description provided for @breakPairConfirm.
+  ///
+  /// In ru, this message translates to:
+  /// **'Удалить пару и данные'**
+  String get breakPairConfirm;
+
+  /// No description provided for @pairDeleteError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось удалить пару. Попробуйте ещё раз.'**
+  String get pairDeleteError;
+
+  /// No description provided for @pairEmailNotVerified.
+  ///
+  /// In ru, this message translates to:
+  /// **'Почта не подтверждена. Пару всё равно можно создать или вступить в неё.'**
+  String get pairEmailNotVerified;
 
   /// No description provided for @enterYourName.
   ///
@@ -1265,7 +1445,7 @@ abstract class AppLocalizations {
   /// No description provided for @pairNotFound.
   ///
   /// In ru, this message translates to:
-  /// **'Пара с таким кодом не найдена на этом устройстве.'**
+  /// **'Пара с таким кодом не найдена.'**
   String get pairNotFound;
 
   /// No description provided for @pairFull.
@@ -1273,6 +1453,18 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'В этой паре уже два участника.'**
   String get pairFull;
+
+  /// No description provided for @pairAlreadyInPair.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вы уже состоите в паре. Откройте существующую пару вместо создания новой.'**
+  String get pairAlreadyInPair;
+
+  /// No description provided for @backendConnectionError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось связаться с сервером. Проверьте подключение и повторите попытку.'**
+  String get backendConnectionError;
 
   /// No description provided for @createPair.
   ///
@@ -1295,13 +1487,13 @@ abstract class AppLocalizations {
   /// No description provided for @pairCodeTitle.
   ///
   /// In ru, this message translates to:
-  /// **'Код локальной пары (тест)'**
+  /// **'Код пары'**
   String get pairCodeTitle;
 
   /// No description provided for @pairCodePrompt.
   ///
   /// In ru, this message translates to:
-  /// **'Код работает только на этом устройстве. Для подключения другого устройства нужен сервер.'**
+  /// **'Передайте этот код второму участнику, чтобы подключить его к вашей паре.'**
   String get pairCodePrompt;
 
   /// No description provided for @copy.
@@ -1526,6 +1718,72 @@ abstract class AppLocalizations {
   /// **'Сегодня: {mood}'**
   String moodToday(Object mood);
 
+  /// No description provided for @moodChange.
+  ///
+  /// In ru, this message translates to:
+  /// **'Изменить настроение'**
+  String get moodChange;
+
+  /// No description provided for @moodChangeTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбери настроение'**
+  String get moodChangeTitle;
+
+  /// No description provided for @moodHistoryForDate.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настроение за {date}'**
+  String moodHistoryForDate(Object date);
+
+  /// No description provided for @moodNoHistory.
+  ///
+  /// In ru, this message translates to:
+  /// **'Для этой даты пока нет записей.'**
+  String get moodNoHistory;
+
+  /// No description provided for @moodHistoryLatest.
+  ///
+  /// In ru, this message translates to:
+  /// **'сейчас'**
+  String get moodHistoryLatest;
+
+  /// No description provided for @moodHistoryTimeUnknown.
+  ///
+  /// In ru, this message translates to:
+  /// **'Время не сохранено'**
+  String get moodHistoryTimeUnknown;
+
+  /// No description provided for @duckOwnedByYouToday.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сегодня утка у вас.'**
+  String get duckOwnedByYouToday;
+
+  /// No description provided for @duckOwnedByPartnerToday.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сегодня утка у участника: {name}.'**
+  String duckOwnedByPartnerToday(Object name);
+
+  /// No description provided for @duckMoodEnvelopeClosed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настроение партнёра. Нажмите, чтобы открыть.'**
+  String get duckMoodEnvelopeClosed;
+
+  /// No description provided for @duckMoodEnvelopeOpen.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настроение партнёра: {mood}'**
+  String duckMoodEnvelopeOpen(Object mood);
+
+  /// No description provided for @duckNotOwnerAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сегодня заботиться об утке может только её владелец.'**
+  String get duckNotOwnerAction;
+
   /// No description provided for @moodResponse.
   ///
   /// In ru, this message translates to:
@@ -1724,6 +1982,18 @@ abstract class AppLocalizations {
   /// **'Имя уточки сохраняется только на этом устройстве. Синхронизация между участниками пока не подключена.'**
   String get duckNameLocalNotice;
 
+  /// No description provided for @duckNameSynchronizedNotice.
+  ///
+  /// In ru, this message translates to:
+  /// **'Имя уточки синхронизируется между участниками пары.'**
+  String get duckNameSynchronizedNotice;
+
+  /// No description provided for @sharedPairSyncNotice.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настроения синхронизируются между участниками пары.'**
+  String get sharedPairSyncNotice;
+
   /// No description provided for @cinemaLike.
   ///
   /// In ru, this message translates to:
@@ -1901,80 +2171,26 @@ abstract class AppLocalizations {
   /// No description provided for @postcardPushUnavailable.
   ///
   /// In ru, this message translates to:
-  /// **'LAN-сервер не настроен. Запустите сервер на ноутбуке, подключите оба телефона к той же Wi-Fi сети, затем укажите адрес и общий токен. Для получения нажмите «Обновить».'**
+  /// **'Синхронизация открыток с сервером пока не подключена.'**
   String get postcardPushUnavailable;
 
-  /// No description provided for @postcardLanConfigured.
+  /// No description provided for @postcardBackendConfigured.
   ///
   /// In ru, this message translates to:
-  /// **'LAN-сервер настроен. Телефоны должны быть в той же Wi-Fi сети, сервер на ноутбуке — запущен. Новые открытки проверяются вручную.'**
-  String get postcardLanConfigured;
+  /// **'Открытки синхронизируются с сервером пары, пока приложение открыто; push-уведомления не подключены.'**
+  String get postcardBackendConfigured;
 
-  /// No description provided for @postcardLanSettings.
-  ///
-  /// In ru, this message translates to:
-  /// **'Настроить LAN-сервер'**
-  String get postcardLanSettings;
-
-  /// No description provided for @postcardLanUpdate.
+  /// No description provided for @postcardRefreshInbox.
   ///
   /// In ru, this message translates to:
   /// **'Обновить входящие'**
-  String get postcardLanUpdate;
+  String get postcardRefreshInbox;
 
-  /// No description provided for @postcardLanSetupTitle.
+  /// No description provided for @postcardBackendRefreshFailed.
   ///
   /// In ru, this message translates to:
-  /// **'Подключение к серверу ноутбука'**
-  String get postcardLanSetupTitle;
-
-  /// No description provided for @postcardLanEndpoint.
-  ///
-  /// In ru, this message translates to:
-  /// **'Адрес ноутбука, например http://192.168.1.5:8787'**
-  String get postcardLanEndpoint;
-
-  /// No description provided for @postcardLanToken.
-  ///
-  /// In ru, this message translates to:
-  /// **'Общий токен пары из терминала сервера'**
-  String get postcardLanToken;
-
-  /// No description provided for @postcardLanSide.
-  ///
-  /// In ru, this message translates to:
-  /// **'Этот телефон использует сторону'**
-  String get postcardLanSide;
-
-  /// No description provided for @postcardLanFirst.
-  ///
-  /// In ru, this message translates to:
-  /// **'Участник 1'**
-  String get postcardLanFirst;
-
-  /// No description provided for @postcardLanSecond.
-  ///
-  /// In ru, this message translates to:
-  /// **'Участник 2'**
-  String get postcardLanSecond;
-
-  /// No description provided for @postcardLanSaved.
-  ///
-  /// In ru, this message translates to:
-  /// **'Подключение к LAN-серверу сохранено.'**
-  String get postcardLanSaved;
-
-  /// No description provided for @postcardLanHttpWarning.
-  ///
-  /// In ru, this message translates to:
-  /// **'Используйте только доверенную домашнюю Wi-Fi сеть: HTTP не шифрует трафик. Токен даёт доступ к открыткам пары.'**
-  String get postcardLanHttpWarning;
-
-  /// No description provided for @postcardLanRefreshFailed.
-  ///
-  /// In ru, this message translates to:
-  /// **'Не удалось получить открытки с LAN-сервера. Проверьте адрес, токен, Wi-Fi и firewall.'**
-  String get postcardLanRefreshFailed;
+  /// **'Не удалось получить открытки с сервера. Проверьте подключение и повторите попытку.'**
+  String get postcardBackendRefreshFailed;
 
   /// No description provided for @postcardsEmpty.
   ///
@@ -2303,8 +2519,26 @@ abstract class AppLocalizations {
   /// No description provided for @rouletteError.
   ///
   /// In ru, this message translates to:
-  /// **'Не удалось сохранить варианты рулетки.'**
+  /// **'Не удалось синхронизировать варианты рулетки.'**
   String get rouletteError;
+
+  /// No description provided for @rouletteListSwipeHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Листайте вбок: активные варианты и общий список'**
+  String get rouletteListSwipeHint;
+
+  /// No description provided for @rouletteDoThis.
+  ///
+  /// In ru, this message translates to:
+  /// **'Делаем'**
+  String get rouletteDoThis;
+
+  /// No description provided for @rouletteChoiceApplied.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбор сохранён'**
+  String get rouletteChoiceApplied;
 
   /// No description provided for @timeCapsuleOpen.
   ///

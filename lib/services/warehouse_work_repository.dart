@@ -4,10 +4,17 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'grocery_wallet.dart';
+import 'duck_ownership_repository.dart';
 
 class WarehouseWorkRepository {
-  WarehouseWorkRepository({this.preferences, DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  WarehouseWorkRepository({
+    this.preferences,
+    DateTime Function()? clock,
+    DuckOwnershipService? ownershipRepository,
+  }) : _clock = clock ?? DateTime.now,
+       _ownershipRepository =
+           ownershipRepository ??
+           DuckOwnershipRepository(preferences: preferences);
 
   static const storageKey = 'tamagotchi_warehouse_work';
   static const cooldown = Duration(hours: 3);
@@ -15,6 +22,7 @@ class WarehouseWorkRepository {
 
   final SharedPreferences? preferences;
   final DateTime Function() _clock;
+  final DuckOwnershipService _ownershipRepository;
   Future<void> _mutationTail = Future<void>.value();
 
   Future<SharedPreferences> get _store async =>
@@ -56,8 +64,14 @@ class WarehouseWorkRepository {
 
   Future<WarehouseWorkState> beginWork() => _serialize(() async {
     final state = await load();
-    if (state.activeRunId != null) return state;
+    if (state.activeRunId != null) {
+      await _ownershipRepository.requireParticipantSide(
+        state.ownerSide ?? 'first',
+      );
+      return state;
+    }
     final now = _clock();
+    final ownerSide = await _ownershipRepository.requireCurrentOwner(now);
     final availableAt = (state.lastCompletedAt ?? state.lastStartedAt)?.add(
       cooldown,
     );
@@ -69,6 +83,7 @@ class WarehouseWorkRepository {
     final nextState = state.copyWith(
       lastStartedAt: now,
       activeRunId: runId,
+      ownerSide: ownerSide,
       caught: 0,
       missed: 0,
       clearCompletion: true,
@@ -90,6 +105,9 @@ class WarehouseWorkRepository {
       if (state.activeRunId != runId) {
         throw StateError('Warehouse work session is no longer active');
       }
+      await _ownershipRepository.requireParticipantSide(
+        state.ownerSide ?? 'first',
+      );
       if (caught < state.caught || missed < state.missed) {
         throw StateError('Warehouse work progress cannot move backwards');
       }
@@ -105,12 +123,18 @@ class WarehouseWorkRepository {
   }) => _serialize(() async {
     final state = await load();
     if (state.completedRunId == runId) {
+      await _ownershipRepository.requireParticipantSide(
+        state.ownerSide ?? 'first',
+      );
       await _recoverPendingReward(state, wallet);
       return load();
     }
     if (state.activeRunId != runId) {
       throw StateError('Warehouse work session is no longer active');
     }
+    await _ownershipRepository.requireParticipantSide(
+      state.ownerSide ?? 'first',
+    );
     if (caught < 0 ||
         missed < 0 ||
         caught + missed != totalBoxes ||
@@ -202,6 +226,7 @@ class WarehouseWorkState {
     this.lastStartedAt,
     this.lastCompletedAt,
     this.activeRunId,
+    this.ownerSide,
     this.caught = 0,
     this.missed = 0,
     this.completedRunId,
@@ -214,6 +239,7 @@ class WarehouseWorkState {
   final DateTime? lastStartedAt;
   final DateTime? lastCompletedAt;
   final String? activeRunId;
+  final String? ownerSide;
   final int caught;
   final int missed;
   final String? completedRunId;
@@ -228,6 +254,7 @@ class WarehouseWorkState {
     DateTime? lastStartedAt,
     DateTime? lastCompletedAt,
     String? activeRunId,
+    String? ownerSide,
     int? caught,
     int? missed,
     String? completedRunId,
@@ -241,6 +268,7 @@ class WarehouseWorkState {
     lastStartedAt: lastStartedAt ?? this.lastStartedAt,
     lastCompletedAt: lastCompletedAt ?? this.lastCompletedAt,
     activeRunId: clearActiveRun ? null : activeRunId ?? this.activeRunId,
+    ownerSide: clearActiveRun ? null : ownerSide ?? this.ownerSide,
     caught: caught ?? this.caught,
     missed: missed ?? this.missed,
     completedRunId: clearCompletion
@@ -262,6 +290,7 @@ class WarehouseWorkState {
     'lastStartedAt': lastStartedAt?.toIso8601String(),
     'lastCompletedAt': lastCompletedAt?.toIso8601String(),
     'activeRunId': activeRunId,
+    'ownerSide': ownerSide,
     'caught': caught,
     'missed': missed,
     'completedRunId': completedRunId,
@@ -295,6 +324,15 @@ class WarehouseWorkState {
       return value;
     }
 
+    String? readSide() {
+      final value = json['ownerSide'];
+      if (value == null) return null;
+      if (value != 'first' && value != 'second') {
+        throw const FormatException('Invalid warehouse owner side');
+      }
+      return value as String;
+    }
+
     final rewardGranted = json['rewardGranted'] ?? true;
     if (rewardGranted is! bool) {
       throw const FormatException('Invalid warehouse reward state');
@@ -303,6 +341,7 @@ class WarehouseWorkState {
       lastStartedAt: readDate('lastStartedAt'),
       lastCompletedAt: readDate('lastCompletedAt'),
       activeRunId: readString('activeRunId'),
+      ownerSide: readSide(),
       caught: readCount('caught'),
       missed: readCount('missed'),
       completedRunId: readString('completedRunId'),

@@ -43,12 +43,15 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   http: ^1.6.0
+  supabase_flutter: ^2.10.3
   confetti: ^0.8.0
   path_provider: ^2.1.5
   video_player: ^2.10.0
   flutter_local_notifications: 19.5.0
+  firebase_core: ^4.2.1
+  firebase_messaging: ^16.0.3
+  crypto: ^3.0.8
   intl: any
-  supabase_flutter: ^2.18.3
 
 dev_dependencies:
   flutter_test:
@@ -98,6 +101,7 @@ flutter:
 
   assets:
     - assets/images/duck_front_sheet.png
+    - assets/images/mood_envelopes/
     - assets/images/duck_rear_sheet.png
     - assets/images/duck_front_jacket_sheet.png
     - assets/images/duck_rear_jacket_sheet.png
