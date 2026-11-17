@@ -193,12 +193,11 @@ modules were preserved.
 Production already has the pair and shared-mood schema through older equivalent
 migrations; do not blindly reapply
 `20261114170000_allow_anonymous_pair_members` or
-`20261115100000_pair_shared_moods_and_membership_guards`. Shared coupons require
-the additive `20261117100000_pair_shared_coupons` migration, which must be
-applied before releasing this synchronized app; it creates the
-`pair_coupon_states` table and `activate_pair_coupon` function used by the
-client. This branch includes the migration, but it has not been applied to
-production.
+`20261115100000_pair_shared_moods_and_membership_guards`. The shared-coupon
+migration `20261117235742_pair_shared_coupons` has been applied to production;
+it creates the `pair_coupon_states` table and `activate_pair_coupon` function
+used by the client. The matching migration file is included in this branch;
+do not reapply it.
 
 Push notifications remain optional and disabled: Firebase credentials and
 client Dart defines are not configured. Do not apply
