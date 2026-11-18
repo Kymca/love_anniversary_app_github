@@ -12,9 +12,10 @@ void main() {
     'packageName': AppRelease.expectedPackageName,
     'versionName': '1.0.1',
     'versionCode': 2,
+    'abi': 'arm64-v8a',
     'sha256': List.filled(64, 'a').join(),
-    'apkObjectPath': 'releases/2/app-release.apk',
-    'downloadUrl': 'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-release.apk?token=test',
+    'apkObjectPath': 'releases/2/app-arm64-v8a.apk',
+    'downloadUrl': 'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-arm64-v8a.apk?token=test',
     'releaseNotes': 'Improvements',
   };
 
@@ -24,6 +25,7 @@ void main() {
       final release = AppRelease.fromJson(releaseJson);
 
       expect(release.versionCode, 2);
+      expect(release.abi, 'arm64-v8a');
       expect(release.isNewerThan(1), isTrue);
       expect(release.isNewerThan(2), isFalse);
       expect(release.isNewerThan(3), isFalse);
@@ -41,6 +43,28 @@ void main() {
       );
     },
   );
+
+  test('accepts split APK variants for every supported Android ABI', () {
+    for (final abi in AppRelease.supportedAbis) {
+      final apkObjectPath = 'releases/2/app-$abi.apk';
+      final release = AppRelease.fromJson({
+        ...releaseJson,
+        'abi': abi,
+        'apkObjectPath': apkObjectPath,
+        'downloadUrl':
+            'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/$apkObjectPath?token=test',
+      });
+
+      expect(release.abi, abi);
+      expect(release.apkObjectPath, apkObjectPath);
+      expect(
+        release.hasTrustedDownloadLocation(
+          Uri.parse('https://xbbybirzhmhlsnvmyvxa.supabase.co'),
+        ),
+        isTrue,
+      );
+    }
+  });
 
   test('parses update-check responses and validates the server decision', () {
     final baseUrl = Uri.parse('https://xbbybirzhmhlsnvmyvxa.supabase.co');
@@ -83,7 +107,7 @@ void main() {
     expect(
       () => AppRelease.fromJson({
         ...releaseJson,
-        'downloadUrl': 'http://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-release.apk?token=test',
+        'downloadUrl': 'http://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-arm64-v8a.apk?token=test',
       }),
       throwsFormatException,
     );
@@ -98,8 +122,12 @@ void main() {
     expect(
       () => AppRelease.fromJson({
         ...releaseJson,
-        'apkObjectPath': 'releases/3/app-release.apk',
+        'apkObjectPath': 'releases/3/app-arm64-v8a.apk',
       }),
+      throwsFormatException,
+    );
+    expect(
+      () => AppRelease.fromJson({...releaseJson, 'abi': 'riscv64'}),
       throwsFormatException,
     );
     expect(
@@ -107,12 +135,9 @@ void main() {
         {
           'updateAvailable': true,
           ...releaseJson,
-          'downloadUrl':
-              'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/another-bucket/releases/2/app-release.apk?token=test',
+          'downloadUrl': 'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/another-bucket/releases/2/app-arm64-v8a.apk?token=test',
         },
-        supabaseBaseUrl: Uri.parse(
-          'https://xbbybirzhmhlsnvmyvxa.supabase.co',
-        ),
+        supabaseBaseUrl: Uri.parse('https://xbbybirzhmhlsnvmyvxa.supabase.co'),
         installedVersionCode: 1,
       ),
       throwsFormatException,
@@ -120,8 +145,7 @@ void main() {
     expect(
       () => AppRelease.fromJson({
         ...releaseJson,
-        'downloadUrl':
-            'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-release.apk',
+        'downloadUrl': 'https://xbbybirzhmhlsnvmyvxa.supabase.co/storage/v1/object/sign/app-releases/releases/2/app-arm64-v8a.apk',
       }),
       throwsFormatException,
     );

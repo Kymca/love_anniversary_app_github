@@ -31,6 +31,7 @@ class MainActivity : FlutterActivity() {
                                 @Suppress("DEPRECATION")
                                 info.versionCode
                             },
+                            "supportedAbis" to Build.SUPPORTED_ABIS.toList(),
                         ),
                     )
                 }
