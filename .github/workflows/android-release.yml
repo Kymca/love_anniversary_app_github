@@ -109,6 +109,19 @@ jobs:
             --build-name "$version_name" \
             --build-number "$version_code"
           mkdir -p dist
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            source="build/app/outputs/flutter-apk/app-$abi-release.apk"
+            if [[ ! -f "$source" ]]; then
+              echo "::error::Expected split APK was not built: $source"
+              exit 1
+            fi
+            cp "$source" "dist/app-$abi.apk"
+          done
+          flutter build apk --release \
+            --target-platform android-arm,android-arm64 \
+            --build-name "$version_name" \
+            --build-number "$version_code"
+          cp build/app/outputs/flutter-apk/app-release.apk dist/app-release.apk
           commit_notes="$(git log -1 --pretty=%s)"
           release_notes="${INPUT_RELEASE_NOTES:-$commit_notes}"
           export VERSION_NAME="$version_name"
@@ -121,14 +134,23 @@ jobs:
           from pathlib import Path
 
           code = int(os.environ["VERSION_CODE"])
+          legacy_apk = Path("dist/app-release.apk")
+          legacy_bytes = legacy_apk.read_bytes()
+          maximum_apk_bytes = 50 * 1024 * 1024
+          if len(legacy_bytes) > maximum_apk_bytes:
+              raise SystemExit(
+                  f"Legacy universal APK exceeds the 50 MiB upload cap: "
+                  f"{len(legacy_bytes)} bytes"
+              )
           variants = []
           for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
-              source = Path("build/app/outputs/flutter-apk") / f"app-{abi}-release.apk"
-              if not source.is_file():
-                  raise SystemExit(f"Expected split APK was not built: {source}")
               destination = Path("dist") / f"app-{abi}.apk"
-              apk_bytes = source.read_bytes()
-              destination.write_bytes(apk_bytes)
+              apk_bytes = destination.read_bytes()
+              if len(apk_bytes) > maximum_apk_bytes:
+                  raise SystemExit(
+                      f"Split APK exceeds the 50 MiB upload cap: "
+                      f"{destination} ({len(apk_bytes)} bytes)"
+                  )
               variants.append({
                   "abi": abi,
                   "sha256": hashlib.sha256(apk_bytes).hexdigest(),
@@ -137,6 +159,8 @@ jobs:
 
           manifest = {
               "versionCode": code,
+              "sha256": hashlib.sha256(legacy_bytes).hexdigest(),
+              "apkObjectPath": f"releases/{code}/app-release.apk",
               "versionName": os.environ["VERSION_NAME"],
               "packageName": "com.example.love_anniversary_app",
               "releaseNotes": os.environ["RELEASE_NOTES"],
@@ -181,6 +205,14 @@ jobs:
               --data-binary "@dist/app-$abi.apk" \
               "$object_base/releases/$VERSION_CODE/app-$abi.apk"
           done
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "@$auth_file" \
+            --header 'Content-Type: application/vnd.android.package-archive' \
+            --header 'x-upsert: false' \
+            --data-binary '@dist/app-release.apk' \
+            "$object_base/releases/$VERSION_CODE/app-release.apk"
 
           curl --fail --silent --show-error \
             --request POST \

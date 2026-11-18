@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   expectedPackageName,
   isReleaseManifest,
-  selectCompatibleApkVariant,
+  selectReleaseApk,
 } from "./release_manifest.ts";
 
 const bucketName = "app-releases";
@@ -73,10 +73,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ error: "Invalid update request." }, 400);
   }
 
-  const { versionCode, packageName, supportedAbis } = requestBody as Record<
-    string,
-    unknown
-  >;
+  const parsedRequest = requestBody as Record<string, unknown>;
+  const { versionCode, packageName, supportedAbis } = parsedRequest;
   if (
     typeof versionCode !== "number" ||
     !Number.isSafeInteger(versionCode) ||
@@ -85,19 +83,22 @@ Deno.serve(async (request: Request): Promise<Response> => {
   ) {
     return jsonResponse({ error: "Invalid package or version code." }, 400);
   }
-  if (
-    !Array.isArray(supportedAbis) ||
-    supportedAbis.length === 0 ||
-    supportedAbis.length > 16
-  ) {
-    return jsonResponse({ error: "Invalid supported ABI list." }, 400);
-  }
   const requestedAbis: string[] = [];
-  for (const abi of supportedAbis) {
-    if (typeof abi !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(abi)) {
+  const hasSupportedAbis = Object.hasOwn(parsedRequest, "supportedAbis");
+  if (hasSupportedAbis) {
+    if (
+      !Array.isArray(supportedAbis) ||
+      supportedAbis.length === 0 ||
+      supportedAbis.length > 16
+    ) {
       return jsonResponse({ error: "Invalid supported ABI list." }, 400);
     }
-    requestedAbis.push(abi);
+    for (const abi of supportedAbis) {
+      if (typeof abi !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(abi)) {
+        return jsonResponse({ error: "Invalid supported ABI list." }, 400);
+      }
+      requestedAbis.push(abi);
+    }
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -139,8 +140,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ updateAvailable: false });
   }
 
-  const selectedVariant = selectCompatibleApkVariant(manifest, requestedAbis);
-  if (!selectedVariant) {
+  const selectedApk = selectReleaseApk(
+    manifest,
+    hasSupportedAbis ? requestedAbis : undefined,
+  );
+  if (!selectedApk) {
     return jsonResponse(
       { error: "No compatible APK variant is available." },
       422,
@@ -149,7 +153,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const { data: signedAsset, error: signedUrlError } = await admin.storage
     .from(bucketName)
-    .createSignedUrl(selectedVariant.apkObjectPath, signedUrlLifetimeSeconds);
+    .createSignedUrl(selectedApk.apkObjectPath, signedUrlLifetimeSeconds);
   if (signedUrlError || !signedAsset?.signedUrl) {
     console.error("Could not sign the update APK URL.", signedUrlError);
     return jsonResponse({ error: "Update download is unavailable." }, 503);
@@ -157,7 +161,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const signedUrl = new URL(signedAsset.signedUrl, supabaseUrl);
   const expectedStoragePath =
-    `/storage/v1/object/sign/${bucketName}/${selectedVariant.apkObjectPath}`;
+    `/storage/v1/object/sign/${bucketName}/${selectedApk.apkObjectPath}`;
   if (
     signedUrl.protocol !== "https:" ||
     signedUrl.host !== new URL(supabaseUrl).host ||
@@ -168,15 +172,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ error: "Update download is unavailable." }, 503);
   }
 
-  return jsonResponse({
+  const response: Record<string, unknown> = {
     updateAvailable: true,
     versionCode: manifest.versionCode,
     versionName: manifest.versionName,
     packageName: manifest.packageName,
     releaseNotes: manifest.releaseNotes,
-    abi: selectedVariant.abi,
-    sha256: selectedVariant.sha256,
-    apkObjectPath: selectedVariant.apkObjectPath,
+    sha256: selectedApk.sha256,
+    apkObjectPath: selectedApk.apkObjectPath,
     downloadUrl: signedUrl.toString(),
-  });
+  };
+  if (selectedApk.abi) response.abi = selectedApk.abi;
+  return jsonResponse(response);
 });

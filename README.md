@@ -146,7 +146,10 @@ before uploading. It writes immutable versioned objects
 `releases/<versionCode>/manifest.json`, then updates
 `releases/latest.json`.
 The manifest contains the release metadata and an `apkVariants` array with an
-ABI, SHA-256 checksum, and object path for each APK.
+ABI, SHA-256 checksum, and object path for each split APK. It also retains the
+top-level `sha256` and `apkObjectPath` fields for an ARM/ARM64 universal APK at
+`releases/<versionCode>/app-release.apk`; this compatibility APK is subject to
+the same 50 MiB upload limit.
 
 The owner has applied the private-bucket migration and deployed
 `app-update-check` v1. The bucket remains empty until a signed release workflow
@@ -169,21 +172,25 @@ Android secrets. Keep it private and backed up. This is a debug
 keystore, not a dedicated production key; changing signing keys later prevents
 in-place updates without reinstalling the app.
 
-The app calls the `app-update-check` Edge Function with its installed
+The current app calls the `app-update-check` Edge Function with its installed
 `versionCode`, package name, and `Build.SUPPORTED_ABIS` in Android preference
 order. The function reads the private `releases/latest.json`, compares
 package/version, selects the first matching ABI variant, creates a five-minute
 signed URL for exactly that variant's `apkObjectPath`, and returns
 `updateAvailable`, the selected ABI/checksum/path, and `downloadUrl`. A device
 without a matching ABI receives an explicit error rather than an incompatible
-APK. The mobile app uses only the
+split APK. Requests from older installed clients that omit `supportedAbis`
+receive the ARM/ARM64 universal APK at the legacy `app-release.apk` path. Its
+top-level manifest fields also let the currently deployed v1 function continue
+serving those older clients during rollout. The mobile app uses only the
 existing Supabase publishable key; it has no service-role credential. Function
 source, `verify_jwt = false` configuration, and private-bucket migration are
 included in this repository. The deployed v1 function was checked against the
-previous universal-APK manifest contract. Before the first per-ABI release,
-deploy the updated function so it understands the `apkVariants` manifest and
-`supportedAbis` request. The bucket is currently empty; no APK or manifest has
-been uploaded.
+previous universal-APK manifest contract. The first release now retains that
+contract while also including split variants, allowing legacy clients and v1
+to continue using the universal APK. Deploy the updated function before
+distributing the split-aware app so it can select ABI variants. The bucket is
+currently empty; no APK or manifest has been uploaded.
 
 Because this app has no user sign-in, `app-update-check` must be callable
 anonymously (for example with Edge Function JWT verification disabled). Keep

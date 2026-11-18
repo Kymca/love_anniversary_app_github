@@ -15,10 +15,18 @@ export type ReleaseApkVariant = {
 
 export type ReleaseManifest = {
   versionCode: number;
+  sha256: string;
+  apkObjectPath: string;
   versionName: string;
   packageName: string;
   releaseNotes: string;
   apkVariants: ReleaseApkVariant[];
+};
+
+export type SelectedReleaseApk = {
+  abi?: AndroidAbi;
+  sha256: string;
+  apkObjectPath: string;
 };
 
 const maximumReleaseNotesLength = 8_000;
@@ -48,6 +56,10 @@ export function isReleaseManifest(value: unknown): value is ReleaseManifest {
     typeof manifest.versionCode !== "number" ||
     !Number.isSafeInteger(manifest.versionCode) ||
     manifest.versionCode <= 0 ||
+    typeof manifest.sha256 !== "string" ||
+    !/^[a-fA-F0-9]{64}$/.test(manifest.sha256) ||
+    manifest.apkObjectPath !==
+      `releases/${manifest.versionCode}/app-release.apk` ||
     typeof manifest.versionName !== "string" ||
     manifest.versionName.length === 0 ||
     manifest.versionName.length > 64 ||
@@ -84,4 +96,24 @@ export function selectCompatibleApkVariant(
     if (variant) return variant;
   }
   return undefined;
+}
+
+export function selectReleaseApk(
+  manifest: ReleaseManifest,
+  requestedAbis?: readonly string[],
+): SelectedReleaseApk | undefined {
+  if (requestedAbis === undefined) {
+    return {
+      sha256: manifest.sha256,
+      apkObjectPath: manifest.apkObjectPath,
+    };
+  }
+  const variant = selectCompatibleApkVariant(manifest, requestedAbis);
+  return variant
+    ? {
+      abi: variant.abi,
+      sha256: variant.sha256,
+      apkObjectPath: variant.apkObjectPath,
+    }
+    : undefined;
 }
