@@ -14,42 +14,39 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test(
-    'selects a date-stable daily quote from a synthetic export',
-    () async {
-      final service = _service(_balancedExport(12));
-      final lateOnDay = DateTime(2026, 11, 14, 23, 59);
-      final first = await service.getDailySnippet(date: lateOnDay);
-      final sameDay = await service.getDailySnippet(
-        date: DateTime(2026, 11, 14, 7),
-      );
-      final nextDay = await service.getDailySnippet(
-        date: DateTime(2026, 11, 15, 0, 1),
-      );
+  test('selects a date-stable daily quote from a synthetic export', () async {
+    final service = _service(_balancedExport(12));
+    final lateOnDay = DateTime(2026, 11, 14, 23, 59);
+    final first = await service.getDailySnippet(date: lateOnDay);
+    final sameDay = await service.getDailySnippet(
+      date: DateTime(2026, 11, 14, 7),
+    );
+    final nextDay = await service.getDailySnippet(
+      date: DateTime(2026, 11, 15, 0, 1),
+    );
 
-      expect(first.messages.length, inInclusiveRange(6, 10));
-      expect(sameDay.id, first.id);
-      expect(nextDay.id, isNot(first.id));
-      final authorCounts = <String, int>{};
-      for (final message in first.messages) {
-        expect(message.text.trim(), isNotEmpty);
-        expect(message.timestamp, isNotNull);
-        expect(
-          TelegramChatService.negativeTriggers.any(
-            (trigger) => message.text.toLowerCase().contains(trigger),
-          ),
-          isFalse,
-        );
-        authorCounts.update(
-          message.author,
-          (count) => count + 1,
-          ifAbsent: () => 1,
-        );
-      }
-      expect(authorCounts, hasLength(2));
-      expect(authorCounts.values, everyElement(greaterThanOrEqualTo(3)));
-    },
-  );
+    expect(first.messages.length, inInclusiveRange(6, 10));
+    expect(sameDay.id, first.id);
+    expect(nextDay.id, isNot(first.id));
+    final authorCounts = <String, int>{};
+    for (final message in first.messages) {
+      expect(message.text.trim(), isNotEmpty);
+      expect(message.timestamp, isNotNull);
+      expect(
+        TelegramChatService.negativeTriggers.any(
+          (trigger) => message.text.toLowerCase().contains(trigger),
+        ),
+        isFalse,
+      );
+      authorCounts.update(
+        message.author,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    expect(authorCounts, hasLength(2));
+    expect(authorCounts.values, everyElement(greaterThanOrEqualTo(3)));
+  });
 
   test('rebuilds same-day daily quote cache from an updated export', () async {
     final preferences = await SharedPreferences.getInstance();
@@ -287,6 +284,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Подходящего воспоминания пока нет.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('memory-error')), findsNothing);
     expect(
       find.text(
         'Не получилось загрузить воспоминание. Проверьте файл экспорта чата.',
@@ -311,13 +309,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Подходящего воспоминания пока нет.'), findsOneWidget);
+      expect(find.text('Подходящего воспоминания пока нет.'), findsNothing);
       expect(
-        find.text(
-          'Не получилось загрузить воспоминание. Проверьте файл экспорта чата.',
-        ),
-        findsNothing,
+        find.text('Добавьте локальный экспорт переписки Telegram.'),
+        findsOneWidget,
       );
+      expect(find.byKey(const ValueKey('memory-error')), findsOneWidget);
       expect(find.text('Показать другой момент'), findsNothing);
       expect(tester.takeException(), isNull);
     }

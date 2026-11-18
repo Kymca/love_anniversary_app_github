@@ -7,6 +7,18 @@
   "appUpdateDismiss": "Позже",
   "appUpdatePermissionHint": "Разрешите установку для этого приложения в настройках Android, затем нажмите «Обновить» ещё раз.",
   "appUpdateFailed": "Не удалось загрузить обновление. Попробуйте позже.",
+  "appUpdateSettingsTitle": "Обновление приложения",
+  "appUpdateCheckAction": "Проверить обновления",
+  "appUpdateChecking": "Проверяем обновления…",
+  "appUpdateAvailable": "Доступно обновление {version}",
+  "@appUpdateAvailable": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "appUpdateUpToDate": "У вас установлена последняя версия.",
+  "appUpdateCheckFailed": "Не удалось проверить обновления. Попробуйте позже.",
+  "appUpdateCheckUnavailable": "Проверка обновлений сейчас недоступна.",
   "homeTab": "Наша история",
   "petTab": "Тамагочи",
   "memoriesTab": "Воспоминания",
@@ -225,6 +237,9 @@
   "mediaFileMissing": "Выбранный файл не найден.",
   "unknownAuthor": "Неизвестно",
   "dailyQuoteTitle": "Кря-цитата дня",
+  "importTelegramExport": "Выбрать экспорт Telegram JSON",
+  "telegramExportUnavailable": "Добавьте локальный экспорт переписки Telegram.",
+  "telegramExportImportError": "Не удалось прочитать файл. Выберите экспорт Telegram JSON.",
   "removeFavorite": "Убрать из избранного",
   "addFavorite": "Добавить в избранное",
   "showAnotherMoment": "Показать другой момент",
@@ -459,6 +474,7 @@
   "rouletteActivity": "Занятия",
   "rouletteSpin": "Крутить",
   "rouletteSpinAgain": "Крутить ещё",
+  "rouletteSpinInProgress": "Рулетка уже вращается у вас или партнёра.",
   "rouletteResult": "Сегодня выбираем:",
   "rouletteAddChoice": "Добавить вариант",
   "rouletteChoiceHint": "Например, приготовить пасту",

@@ -106,4 +106,15 @@ class UnavailableRouletteRepository implements RouletteRepository {
   @override
   Stream<void> watchChanges(RouletteCategory category) =>
       Stream.error(SupabaseUnavailableException(reason));
+
+  @override
+  Future<RouletteSpin?> startSpin(
+    RouletteCategory category,
+    String choice,
+    String choiceKey,
+  ) async => _unavailable();
+
+  @override
+  Stream<RouletteSpin> watchSpins() =>
+      Stream.error(SupabaseUnavailableException(reason));
 }

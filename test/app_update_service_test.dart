@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:love_anniversary_app/l10n/generated/app_localizations.dart';
 import 'package:love_anniversary_app/main.dart';
 import 'package:love_anniversary_app/models/app_release.dart';
+import 'package:love_anniversary_app/screens/settings_screen.dart';
 import 'package:love_anniversary_app/services/app_update_service.dart';
 import 'package:love_anniversary_app/widgets/app_update_banner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -188,6 +191,45 @@ void main() {
     expect(find.textContaining('Доступно обновление'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('settings manually checks and reports update results', (
+    tester,
+  ) async {
+    final pendingCheck = Completer<AppRelease?>();
+    Future<AppRelease?> Function() checkForUpdate = () => pendingCheck.future;
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ru'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SettingsScreen(
+          authService: null,
+          onCheckForUpdate: () => checkForUpdate(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Проверить обновления'));
+    await tester.pump();
+    expect(find.text('Проверяем обновления…'), findsOneWidget);
+
+    pendingCheck.complete(AppRelease.fromJson(releaseJson));
+    await tester.pumpAndSettle();
+    expect(find.text('Доступно обновление 1.0.1'), findsOneWidget);
+
+    checkForUpdate = () async => null;
+    await tester.tap(find.text('Проверить обновления'));
+    await tester.pumpAndSettle();
+    expect(find.text('У вас установлена последняя версия.'), findsOneWidget);
+
+    checkForUpdate = () async => throw StateError('check failed');
+    await tester.tap(find.text('Проверить обновления'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Не удалось проверить обновления. Попробуйте позже.'),
+      findsOneWidget,
+    );
   });
 }
 

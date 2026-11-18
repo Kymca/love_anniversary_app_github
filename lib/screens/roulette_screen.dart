@@ -29,11 +29,13 @@ class RouletteScreen extends StatefulWidget {
 
 class _RouletteScreenState extends State<RouletteScreen>
     with SingleTickerProviderStateMixin {
+  static const _spinDuration = Duration(milliseconds: 3200);
+
   late final RouletteRepository _repository =
       widget.repository ?? SharedPreferencesRouletteRepository();
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 3200),
+    duration: _spinDuration,
   )..addListener(_onSpinFrame);
   late final math.Random _random = widget.random();
   final RouletteSpinSound _spinSound = RouletteSpinSound();
@@ -43,14 +45,18 @@ class _RouletteScreenState extends State<RouletteScreen>
   List<String> _sharedChoices = const [];
   Set<String> _excludedKeys = {};
   StreamSubscription<void>? _changesSubscription;
+  StreamSubscription<RouletteSpin>? _spinSubscription;
+  final Set<String> _handledSpinIds = {};
   double _rotation = 0;
   double _spinStart = 0;
   double _spinTarget = 0;
   String? _result;
   bool _isSpinning = false;
+  bool _isRequestingSpin = false;
   bool _isApplying = false;
   bool _choiceApplied = false;
   bool _loadFailed = false;
+  bool _choicesRefreshPending = false;
 
   @override
   void initState() {
@@ -58,6 +64,7 @@ class _RouletteScreenState extends State<RouletteScreen>
     if (widget.isActive) {
       _refreshChoices();
       _watchChanges();
+      _watchSpins();
     }
   }
 
@@ -67,11 +74,14 @@ class _RouletteScreenState extends State<RouletteScreen>
     if (!widget.isActive && oldWidget.isActive) {
       _changesSubscription?.cancel();
       _changesSubscription = null;
+      _spinSubscription?.cancel();
+      _spinSubscription = null;
     } else if (widget.isActive &&
         (!oldWidget.isActive ||
             widget.pairRevision != oldWidget.pairRevision)) {
       _refreshChoices();
       _watchChanges();
+      _watchSpins();
     }
   }
 
@@ -89,6 +99,7 @@ class _RouletteScreenState extends State<RouletteScreen>
       ..dispose();
     _spinSound.cancel();
     _changesSubscription?.cancel();
+    _spinSubscription?.cancel();
     _choiceController.dispose();
     super.dispose();
   }
@@ -124,8 +135,11 @@ class _RouletteScreenState extends State<RouletteScreen>
         RouletteCategory.activity => strings.rouletteActivity,
       };
 
-  Future<void> _selectCategory(RouletteCategory category) async {
-    if (_isSpinning || category == _category) return;
+  Future<void> _selectCategory(
+    RouletteCategory category, {
+    bool force = false,
+  }) async {
+    if ((!force && _isSpinning) || category == _category) return;
     setState(() {
       _category = category;
       _result = null;
@@ -139,7 +153,7 @@ class _RouletteScreenState extends State<RouletteScreen>
 
   Future<void> _addChoice() async {
     final value = _choiceController.text.trim();
-    if (value.isEmpty || _isSpinning) return;
+    if (value.isEmpty || _isSpinning || _isRequestingSpin) return;
     try {
       await _repository.addChoice(_category, value);
       if (!mounted) return;
@@ -165,6 +179,7 @@ class _RouletteScreenState extends State<RouletteScreen>
   }
 
   Future<void> _removeChoice(String choice) async {
+    if (_isSpinning || _isRequestingSpin) return;
     try {
       await _repository.removeChoice(_category, choice);
       if (!mounted) return;
@@ -182,6 +197,7 @@ class _RouletteScreenState extends State<RouletteScreen>
   }
 
   Future<void> _setChoiceActive(String choice, bool active) async {
+    if (_isSpinning || _isRequestingSpin) return;
     try {
       if (active) {
         await _repository.addChoice(_category, choice);
@@ -204,11 +220,34 @@ class _RouletteScreenState extends State<RouletteScreen>
     _changesSubscription = _repository
         .watchChanges(_category)
         .listen(
-          (_) => _refreshChoices(),
+          (_) {
+            if (_isSpinning) {
+              _choicesRefreshPending = true;
+            } else {
+              unawaited(_refreshChoices());
+            }
+          },
           onError: (Object _) {
             if (mounted) setState(() => _loadFailed = true);
           },
         );
+  }
+
+  void _watchSpins() {
+    _spinSubscription?.cancel();
+    if (!widget.isActive) return;
+    _spinSubscription = _repository.watchSpins().listen(
+      (spin) => unawaited(_handleSharedSpin(spin)),
+      onError: (Object _) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.rouletteError),
+            ),
+          );
+        }
+      },
+    );
   }
 
   Future<void> _refreshChoices() async {
@@ -274,15 +313,80 @@ class _RouletteScreenState extends State<RouletteScreen>
   }
 
   Future<void> _spin() async {
+    if (_isSpinning || _isRequestingSpin) return;
+    setState(() => _isRequestingSpin = true);
+    try {
+      await _refreshChoices();
+      if (!mounted || _choices.isEmpty) return;
+      final chosenIndex = _random.nextInt(_choices.length);
+      final choice = _choices[chosenIndex];
+      final spin = await _repository.startSpin(
+        _category,
+        choice,
+        _keyForChoice(choice),
+      );
+      if (!mounted) return;
+      if (spin == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.rouletteSpinInProgress),
+          ),
+        );
+        return;
+      }
+      await _handleSharedSpin(spin);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.rouletteError)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRequestingSpin = false);
+    }
+  }
+
+  Future<void> _handleSharedSpin(RouletteSpin spin) async {
+    if (!mounted || !widget.isActive || _handledSpinIds.contains(spin.id)) {
+      return;
+    }
+    final spinAge = DateTime.now().toUtc().difference(spin.startedAt);
+    if (spinAge > const Duration(seconds: 4)) return;
+    _handledSpinIds.add(spin.id);
+    if (_handledSpinIds.length > 24) {
+      _handledSpinIds.remove(_handledSpinIds.first);
+    }
     if (_isSpinning) return;
+    if (spin.category != _category) {
+      await _selectCategory(spin.category, force: true);
+    }
     await _refreshChoices();
-    if (!mounted || _choices.isEmpty) return;
-    final chosenIndex = _random.nextInt(_choices.length);
+    if (!mounted) return;
+    var chosenIndex = _choices.indexWhere(
+      (choice) => _keyForChoice(choice) == spin.choiceKey,
+    );
+    if (chosenIndex < 0) {
+      setState(() => _choices = [..._choices, spin.choice]);
+      chosenIndex = _choices.length - 1;
+    }
     final slice = math.pi * 2 / _choices.length;
     final center = -math.pi / 2 + (chosenIndex + 0.5) * slice;
     final delta = (-math.pi / 2 - center - _rotation) % (math.pi * 2);
     final target =
         _rotation + math.pi * 2 * 5 + (delta < 0 ? delta + math.pi * 2 : delta);
+    final elapsed = spinAge.isNegative ? Duration.zero : spinAge;
+    if (elapsed >= _spinDuration) {
+      setState(() {
+        _result = _choices[chosenIndex];
+        _choiceApplied = false;
+        _isSpinning = false;
+        _rotation = target;
+      });
+      _controller.reset();
+      unawaited(AppSoundService.play(AppSoundEvent.rouletteStopped));
+      await _refreshPendingChoices();
+      return;
+    }
     setState(() {
       _result = null;
       _choiceApplied = false;
@@ -292,7 +396,9 @@ class _RouletteScreenState extends State<RouletteScreen>
     });
     _spinSound.start();
     try {
-      await _controller.forward();
+      await _controller.forward(
+        from: elapsed.inMicroseconds / _spinDuration.inMicroseconds,
+      );
     } finally {
       _spinSound.cancel();
     }
@@ -304,6 +410,13 @@ class _RouletteScreenState extends State<RouletteScreen>
     });
     _controller.reset();
     unawaited(AppSoundService.play(AppSoundEvent.rouletteStopped));
+    await _refreshPendingChoices();
+  }
+
+  Future<void> _refreshPendingChoices() async {
+    if (!_choicesRefreshPending) return;
+    _choicesRefreshPending = false;
+    await _refreshChoices();
   }
 
   @override
@@ -407,7 +520,7 @@ class _RouletteScreenState extends State<RouletteScreen>
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const ValueKey('roulette-spin'),
-              onPressed: _isSpinning ? null : _spin,
+              onPressed: _isSpinning || _isRequestingSpin ? null : _spin,
               icon: const Icon(Icons.casino_rounded),
               label: Text(
                 _result == null

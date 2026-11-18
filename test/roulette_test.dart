@@ -185,12 +185,64 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('shared spin gives both pair members the same result', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final backend = _SharedRouletteBackend();
+    addTearDown(() async {
+      await backend.changes.close();
+      await backend.spinChanges.close();
+    });
+    final firstMember = _SharedRouletteRepository(backend);
+    final secondMember = _SharedRouletteRepository(backend);
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Row(
+          children: [
+            Expanded(child: RouletteScreen(repository: firstMember)),
+            Expanded(child: RouletteScreen(repository: secondMember)),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Кино').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('roulette-spin')).first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    final results = tester
+        .widgetList<Text>(find.byKey(const ValueKey('roulette-result')))
+        .map((text) => text.data)
+        .toList();
+    expect(results, hasLength(2));
+    expect(results[0], results[1]);
+    final rouletteWidgets = tester
+        .widgetList<SegmentedButton<RouletteCategory>>(
+          find.byType(SegmentedButton<RouletteCategory>),
+        );
+    expect(rouletteWidgets, hasLength(2));
+    expect(rouletteWidgets.last.selected, {RouletteCategory.food});
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _SharedRouletteBackend {
   final Map<RouletteCategory, Map<String, bool>> choices = {};
   final StreamController<RouletteCategory> changes =
       StreamController<RouletteCategory>.broadcast(sync: true);
+  final StreamController<RouletteSpin> spinChanges =
+      StreamController<RouletteSpin>.broadcast(sync: true);
+  var nextSpinId = 0;
 }
 
 class _SharedRouletteRepository implements RouletteRepository {
@@ -247,4 +299,24 @@ class _SharedRouletteRepository implements RouletteRepository {
   Stream<void> watchChanges(RouletteCategory category) => backend.changes.stream
       .where((changed) => changed == category)
       .map((_) {});
+
+  @override
+  Future<RouletteSpin?> startSpin(
+    RouletteCategory category,
+    String choice,
+    String choiceKey,
+  ) async {
+    final spin = RouletteSpin(
+      id: 'spin-${backend.nextSpinId++}',
+      category: category,
+      choiceKey: choiceKey,
+      choice: choice,
+      startedAt: DateTime.now().toUtc(),
+    );
+    backend.spinChanges.add(spin);
+    return spin;
+  }
+
+  @override
+  Stream<RouletteSpin> watchSpins() => backend.spinChanges.stream;
 }

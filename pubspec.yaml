@@ -52,6 +52,7 @@ dependencies:
   firebase_messaging: ^16.0.3
   crypto: ^3.0.8
   intl: any
+  file_picker: ^13.4.0
 
 dev_dependencies:
   flutter_test:
