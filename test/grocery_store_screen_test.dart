@@ -528,6 +528,21 @@ void main() {
       (cashierSheet.image as AssetImage).assetName,
       'assets/images/duck_cashier_front_sheet.png',
     );
+    final cashierTransformFinder = find.descendant(
+      of: find.byKey(const ValueKey('grocery-cashier-duck')),
+      matching: find.byType(Transform),
+    );
+    final initialCashierOffset = tester
+        .widget<Transform>(cashierTransformFinder)
+        .transform
+        .getTranslation();
+    await tester.pump(const Duration(milliseconds: 300));
+    final nextCashierOffset = tester
+        .widget<Transform>(cashierTransformFinder)
+        .transform
+        .getTranslation();
+    expect(nextCashierOffset.x, initialCashierOffset.x);
+    expect(nextCashierOffset.y, initialCashierOffset.y);
     await tester.tap(checkoutBasket);
     await tester.pump();
     expect(find.text('Отсканировано: 1/${productIds.length}'), findsOneWidget);

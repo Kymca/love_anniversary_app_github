@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
 import '../services/app_sound_service.dart';
+import '../services/daily_cinema.dart';
 import '../services/roulette_repository.dart';
 import '../theme/app_theme.dart';
 
@@ -113,11 +114,8 @@ class _RouletteScreenState extends State<RouletteScreen>
       strings.rouletteFoodOptionDessert,
     ],
     RouletteCategory.movie => [
-      strings.rouletteMovieOptionRomcom,
-      strings.rouletteMovieOptionCartoon,
-      strings.rouletteMovieOptionFavorite,
-      strings.rouletteMovieOptionNew,
-      strings.rouletteMovieOptionNight,
+      for (final film in dailyCinemaCatalog)
+        film.titleFor(Localizations.localeOf(context).languageCode),
     ],
     RouletteCategory.activity => [
       strings.rouletteActivityOptionWalk,
@@ -281,7 +279,9 @@ class _RouletteScreenState extends State<RouletteScreen>
     }
   }
 
-  String _defaultChoiceKey(int index) => 'builtin:${_category.name}:$index';
+  String _defaultChoiceKey(int index) => _category == RouletteCategory.movie
+      ? 'builtin:movie:${dailyCinemaCatalog[index].id}'
+      : 'builtin:${_category.name}:$index';
 
   String _keyForChoice(String choice) {
     final defaults = _defaults(AppLocalizations.of(context)!);

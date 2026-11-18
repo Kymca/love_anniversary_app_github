@@ -336,6 +336,7 @@
   "duckOwnedByPartnerToday": "Сегодня утка у участника: {name}.",
   "@duckOwnedByPartnerToday": {"placeholders": {"name": {}}},
   "duckMoodEnvelopeClosed": "Настроение партнёра. Нажмите, чтобы открыть.",
+  "duckMoodEnvelopeUnavailable": "Настроение партнёра пока не получено.",
   "duckMoodEnvelopeOpen": "Настроение партнёра: {mood}",
   "@duckMoodEnvelopeOpen": {"placeholders": {"mood": {}}},
   "duckNotOwnerAction": "Сегодня заботиться об утке может только её владелец.",

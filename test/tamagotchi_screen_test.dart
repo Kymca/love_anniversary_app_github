@@ -351,7 +351,7 @@ void main() {
   });
 
   testWidgets(
-    'non-owner gets no envelope without mood and reopens it after mood changes',
+    'non-owner keeps full-size envelope and shows the latest mood',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'tamagotchi_name': 'Кряква',
@@ -380,9 +380,20 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      final envelope = find.byKey(const ValueKey('incoming-mood-envelope'));
       expect(
-        find.byKey(const ValueKey('incoming-mood-envelope')),
-        findsNothing,
+        envelope,
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('incoming-mood-envelope-frame-0')),
+        ),
+        const Size(240, 205),
+      );
+      expect(
+        find.byTooltip('Настроение партнёра пока не получено.'),
+        findsOneWidget,
       );
       expect(find.byType(DuckPetWidget), findsNothing);
 
@@ -392,6 +403,13 @@ void main() {
       await tester.pump(const Duration(minutes: 1));
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byKey(const ValueKey('incoming-mood-angry')), findsOneWidget);
+      expect(envelope, findsOneWidget);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey('incoming-mood-envelope-frame-0')),
+        ),
+        const Size(240, 205),
+      );
       expect(find.byType(DuckPetWidget), findsNothing);
 
       final feedActions = find.byType(ActionChip);
@@ -409,13 +427,18 @@ void main() {
       await tester.pump();
       expect(tester.widget<FilledButton>(workButton).onPressed, isNull);
 
-      final envelope = find.byKey(const ValueKey('incoming-mood-envelope'));
       await tester.ensureVisible(envelope);
       await tester.pump();
       await tester.tap(envelope);
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pump(const Duration(milliseconds: 700));
       expect(find.byKey(const ValueKey('mood-envelope-face')), findsOneWidget);
+      expect(
+        find.image(
+          const AssetImage('assets/images/mood_envelopes/angry_loop.png'),
+        ),
+        findsOneWidget,
+      );
 
       await profiles.saveCurrentSide('first');
       await moods.record('first', DailyMood.joyful, date: DateTime.now());
@@ -433,6 +456,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pump(const Duration(milliseconds: 700));
       expect(find.byKey(const ValueKey('mood-envelope-face')), findsOneWidget);
+      expect(
+        find.image(
+          const AssetImage('assets/images/mood_envelopes/joyful_loop.png'),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );

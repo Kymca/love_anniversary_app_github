@@ -1082,6 +1082,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Настроение партнёра. Нажмите, чтобы открыть.';
 
   @override
+  String get duckMoodEnvelopeUnavailable =>
+      'Настроение партнёра пока не получено.';
+
+  @override
   String duckMoodEnvelopeOpen(Object mood) {
     return 'Настроение партнёра: $mood';
   }

@@ -1832,6 +1832,12 @@ abstract class AppLocalizations {
   /// **'Настроение партнёра. Нажмите, чтобы открыть.'**
   String get duckMoodEnvelopeClosed;
 
+  /// No description provided for @duckMoodEnvelopeUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Настроение партнёра пока не получено.'**
+  String get duckMoodEnvelopeUnavailable;
+
   /// No description provided for @duckMoodEnvelopeOpen.
   ///
   /// In ru, this message translates to:

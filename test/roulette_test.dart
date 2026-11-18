@@ -161,6 +161,9 @@ void main() {
 
     await tester.tap(find.text('Кино'));
     await tester.pumpAndSettle();
+    expect(find.text('Рататуй'), findsOneWidget);
+    expect(find.text('Приключения Паддингтона'), findsOneWidget);
+    expect(find.text('Романтическая комедия'), findsNothing);
     await tester.enterText(
       find.byKey(const ValueKey('roulette-choice-input')),
       'Наш фильм',
@@ -215,6 +218,7 @@ void main() {
 
     await tester.tap(find.text('Кино').last);
     await tester.pumpAndSettle();
+    expect(find.text('Рататуй'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('roulette-spin')).first);
     await tester.pump();
     await tester.pump(const Duration(seconds: 4));

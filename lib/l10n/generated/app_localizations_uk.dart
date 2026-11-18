@@ -1082,6 +1082,9 @@ class AppLocalizationsUk extends AppLocalizations {
       'Настрій партнера. Натисніть, щоб відкрити.';
 
   @override
+  String get duckMoodEnvelopeUnavailable => 'Настрій партнера ще не отримано.';
+
+  @override
   String duckMoodEnvelopeOpen(Object mood) {
     return 'Настрій партнера: $mood';
   }

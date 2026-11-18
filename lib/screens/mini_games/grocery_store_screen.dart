@@ -571,7 +571,7 @@ class _GroceryStoreScreenState extends State<GroceryStoreScreen>
         ),
         Expanded(
           child: GroceryCashierScene(
-            cashierFrame: _animationClock.frameIndex ~/ 6,
+            cashierFrame: 0,
             customerDuck: _animatedDuck(),
             customerProgress: _walkProgress,
             checkoutItems: _CheckoutBasket(
