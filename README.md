@@ -152,9 +152,11 @@ top-level `sha256` and `apkObjectPath` fields for an ARM/ARM64 universal APK at
 the same 50 MiB upload limit.
 
 The owner has applied the private-bucket migration and deployed
-`app-update-check` v1. The bucket remains empty until a signed release workflow
-run uploads an APK and manifest. In GitHub **Settings → Secrets and variables
-→ Actions**, add repository
+`app-update-check` v2 with `verify_jwt = false`. Release workflow run
+`44209871898` succeeded and published versionCode `1003` to the private bucket:
+all three per-ABI APKs, the ARM/ARM64 universal compatibility APK, and both
+versioned and latest manifests are present. In GitHub
+**Settings → Secrets and variables → Actions**, add repository
 secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`,
 `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`,
 and `SUPABASE_SECRET_KEY` (the Supabase secret API key, prefixed `sb_secret_`).
@@ -181,16 +183,15 @@ signed URL for exactly that variant's `apkObjectPath`, and returns
 without a matching ABI receives an explicit error rather than an incompatible
 split APK. Requests from older installed clients that omit `supportedAbis`
 receive the ARM/ARM64 universal APK at the legacy `app-release.apk` path. Its
-top-level manifest fields also let the currently deployed v1 function continue
-serving those older clients during rollout. The mobile app uses only the
+top-level manifest fields also let the previous v1 function serve those older
+clients. The deployed v2 function has been verified to select each of the
+three ABI variants and the universal APK for a legacy request without
+`supportedAbis`. The mobile app uses only the
 existing Supabase publishable key; it has no service-role credential. Function
 source, `verify_jwt = false` configuration, and private-bucket migration are
-included in this repository. The deployed v1 function was checked against the
-previous universal-APK manifest contract. The first release now retains that
-contract while also including split variants, allowing legacy clients and v1
-to continue using the universal APK. Deploy the updated function before
-distributing the split-aware app so it can select ABI variants. The bucket is
-currently empty; no APK or manifest has been uploaded.
+included in this repository. The release manifest retains the previous
+universal-APK contract while also including split variants, so legacy clients
+can continue using the fallback.
 
 Because this app has no user sign-in, `app-update-check` must be callable
 anonymously (for example with Edge Function JWT verification disabled). Keep
