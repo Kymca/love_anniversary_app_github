@@ -105,30 +105,42 @@ jobs:
             echo "::error::Android versionCode limit exceeded."
             exit 1
           fi
-          flutter build apk --release \
+          flutter build apk --release --split-per-abi \
             --build-name "$version_name" \
             --build-number "$version_code"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/app-release.apk
-          checksum="$(sha256sum dist/app-release.apk | cut -d ' ' -f 1)"
           commit_notes="$(git log -1 --pretty=%s)"
           release_notes="${INPUT_RELEASE_NOTES:-$commit_notes}"
           export VERSION_NAME="$version_name"
           export VERSION_CODE="$version_code"
-          export APK_SHA256="$checksum"
           export RELEASE_NOTES="$release_notes"
           python3 - <<'PY'
+          import hashlib
           import json
           import os
+          from pathlib import Path
 
           code = int(os.environ["VERSION_CODE"])
+          variants = []
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
+              source = Path("build/app/outputs/flutter-apk") / f"app-{abi}-release.apk"
+              if not source.is_file():
+                  raise SystemExit(f"Expected split APK was not built: {source}")
+              destination = Path("dist") / f"app-{abi}.apk"
+              apk_bytes = source.read_bytes()
+              destination.write_bytes(apk_bytes)
+              variants.append({
+                  "abi": abi,
+                  "sha256": hashlib.sha256(apk_bytes).hexdigest(),
+                  "apkObjectPath": f"releases/{code}/app-{abi}.apk",
+              })
+
           manifest = {
               "versionCode": code,
-              "sha256": os.environ["APK_SHA256"],
-              "apkObjectPath": f"releases/{code}/app-release.apk",
               "versionName": os.environ["VERSION_NAME"],
               "packageName": "com.example.love_anniversary_app",
               "releaseNotes": os.environ["RELEASE_NOTES"],
+              "apkVariants": variants,
           }
           with open("dist/manifest.json", "w", encoding="utf-8") as file:
               json.dump(manifest, file, ensure_ascii=False, indent=2)
@@ -160,13 +172,15 @@ jobs:
           fi
 
           object_base="$base_url/storage/v1/object/$SUPABASE_STORAGE_BUCKET"
-          curl --fail --silent --show-error \
-            --request POST \
-            --header "@$auth_file" \
-            --header 'Content-Type: application/vnd.android.package-archive' \
-            --header 'x-upsert: false' \
-            --data-binary '@dist/app-release.apk' \
-            "$object_base/releases/$VERSION_CODE/app-release.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            curl --fail --silent --show-error \
+              --request POST \
+              --header "@$auth_file" \
+              --header 'Content-Type: application/vnd.android.package-archive' \
+              --header 'x-upsert: false' \
+              --data-binary "@dist/app-$abi.apk" \
+              "$object_base/releases/$VERSION_CODE/app-$abi.apk"
+          done
 
           curl --fail --silent --show-error \
             --request POST \

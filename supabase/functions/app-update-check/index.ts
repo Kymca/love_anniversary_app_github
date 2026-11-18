@@ -1,11 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  expectedPackageName,
+  isReleaseManifest,
+  selectCompatibleApkVariant,
+} from "./release_manifest.ts";
 
 const bucketName = "app-releases";
 const manifestPath = "releases/latest.json";
-const expectedPackageName = "com.example.love_anniversary_app";
 const signedUrlLifetimeSeconds = 300;
 const maximumManifestBytes = 16 * 1024;
-const maximumReleaseNotesLength = 8_000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,15 +16,6 @@ const corsHeaders = {
     "authorization, apikey, x-client-info, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Content-Type": "application/json",
-};
-
-type ReleaseManifest = {
-  versionCode: number;
-  sha256: string;
-  apkObjectPath: string;
-  versionName: string;
-  packageName: string;
-  releaseNotes: string;
 };
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -59,26 +53,6 @@ async function readLimitedBody(request: Request): Promise<string> {
   return new TextDecoder().decode(body);
 }
 
-function isReleaseManifest(value: unknown): value is ReleaseManifest {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false;
-  }
-  const manifest = value as Record<string, unknown>;
-  return typeof manifest.versionCode === "number" &&
-    Number.isSafeInteger(manifest.versionCode) &&
-    (manifest.versionCode as number) > 0 &&
-    typeof manifest.sha256 === "string" &&
-    /^[a-fA-F0-9]{64}$/.test(manifest.sha256) &&
-    manifest.apkObjectPath ===
-      `releases/${manifest.versionCode}/app-release.apk` &&
-    typeof manifest.versionName === "string" &&
-    manifest.versionName.length > 0 &&
-    manifest.versionName.length <= 64 &&
-    manifest.packageName === expectedPackageName &&
-    typeof manifest.releaseNotes === "string" &&
-    manifest.releaseNotes.length <= maximumReleaseNotesLength;
-}
-
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -99,14 +73,31 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ error: "Invalid update request." }, 400);
   }
 
-  const { versionCode, packageName } = requestBody as Record<string, unknown>;
+  const { versionCode, packageName, supportedAbis } = requestBody as Record<
+    string,
+    unknown
+  >;
   if (
     typeof versionCode !== "number" ||
     !Number.isSafeInteger(versionCode) ||
-    (versionCode as number) < 0 ||
+    versionCode < 0 ||
     packageName !== expectedPackageName
   ) {
     return jsonResponse({ error: "Invalid package or version code." }, 400);
+  }
+  if (
+    !Array.isArray(supportedAbis) ||
+    supportedAbis.length === 0 ||
+    supportedAbis.length > 16
+  ) {
+    return jsonResponse({ error: "Invalid supported ABI list." }, 400);
+  }
+  const requestedAbis: string[] = [];
+  for (const abi of supportedAbis) {
+    if (typeof abi !== "string" || !/^[a-zA-Z0-9_-]{1,32}$/.test(abi)) {
+      return jsonResponse({ error: "Invalid supported ABI list." }, 400);
+    }
+    requestedAbis.push(abi);
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -148,9 +139,17 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ updateAvailable: false });
   }
 
+  const selectedVariant = selectCompatibleApkVariant(manifest, requestedAbis);
+  if (!selectedVariant) {
+    return jsonResponse(
+      { error: "No compatible APK variant is available." },
+      422,
+    );
+  }
+
   const { data: signedAsset, error: signedUrlError } = await admin.storage
     .from(bucketName)
-    .createSignedUrl(manifest.apkObjectPath, signedUrlLifetimeSeconds);
+    .createSignedUrl(selectedVariant.apkObjectPath, signedUrlLifetimeSeconds);
   if (signedUrlError || !signedAsset?.signedUrl) {
     console.error("Could not sign the update APK URL.", signedUrlError);
     return jsonResponse({ error: "Update download is unavailable." }, 503);
@@ -158,7 +157,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const signedUrl = new URL(signedAsset.signedUrl, supabaseUrl);
   const expectedStoragePath =
-    `/storage/v1/object/sign/${bucketName}/${manifest.apkObjectPath}`;
+    `/storage/v1/object/sign/${bucketName}/${selectedVariant.apkObjectPath}`;
   if (
     signedUrl.protocol !== "https:" ||
     signedUrl.host !== new URL(supabaseUrl).host ||
@@ -171,7 +170,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   return jsonResponse({
     updateAvailable: true,
-    ...manifest,
+    versionCode: manifest.versionCode,
+    versionName: manifest.versionName,
+    packageName: manifest.packageName,
+    releaseNotes: manifest.releaseNotes,
+    abi: selectedVariant.abi,
+    sha256: selectedVariant.sha256,
+    apkObjectPath: selectedVariant.apkObjectPath,
     downloadUrl: signedUrl.toString(),
   });
 });

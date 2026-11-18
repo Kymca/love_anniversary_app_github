@@ -3,6 +3,7 @@ class AppRelease {
     required this.packageName,
     required this.versionName,
     required this.versionCode,
+    required this.abi,
     required this.sha256,
     required this.apkObjectPath,
     required this.downloadUrl,
@@ -11,10 +12,12 @@ class AppRelease {
 
   static const expectedPackageName = 'com.example.love_anniversary_app';
   static const _maximumReleaseNotesLength = 8000;
+  static const supportedAbis = {'arm64-v8a', 'armeabi-v7a', 'x86_64'};
 
   final String packageName;
   final String versionName;
   final int versionCode;
+  final String abi;
   final String sha256;
   final String apkObjectPath;
   final Uri downloadUrl;
@@ -38,6 +41,7 @@ class AppRelease {
     final packageName = json['packageName'];
     final versionName = json['versionName'];
     final versionCode = json['versionCode'];
+    final abi = json['abi'];
     final sha256 = json['sha256'];
     final apkObjectPath = json['apkObjectPath'];
     final downloadUrl = json['downloadUrl'];
@@ -49,9 +53,11 @@ class AppRelease {
         versionName.length > 64 ||
         versionCode is! int ||
         versionCode < 1 ||
+        abi is! String ||
+        !supportedAbis.contains(abi) ||
         sha256 is! String ||
         !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(sha256) ||
-        apkObjectPath != 'releases/$versionCode/app-release.apk' ||
+        apkObjectPath != 'releases/$versionCode/app-$abi.apk' ||
         downloadUrl is! String ||
         releaseNotes is! String ||
         releaseNotes.length > _maximumReleaseNotesLength) {
@@ -72,6 +78,7 @@ class AppRelease {
       packageName: packageName,
       versionName: versionName,
       versionCode: versionCode,
+      abi: abi,
       sha256: sha256.toLowerCase(),
       apkObjectPath: apkObjectPath as String,
       downloadUrl: uri,

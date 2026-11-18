@@ -134,18 +134,19 @@ with `flutter gen-l10n`.
 
 ### Android APK builds and in-app updates
 
-`.github/workflows/android-release.yml` builds a signed Android APK on pushes
-to `main` and on manual workflow dispatch targeting `main`. It uploads the APK
-and manifests only to the private Supabase Storage bucket
+`.github/workflows/android-release.yml` builds signed per-ABI Android APKs on
+pushes to `main` and on manual workflow dispatch targeting `main`. It uploads
+the APKs and manifests only to the private Supabase Storage bucket
 `app-releases`; it
 does not upload APKs to GitHub Releases or Actions artifacts. The bucket must
 already exist and remain private. The workflow verifies the bucket's privacy
 before uploading. It writes immutable versioned objects
-`releases/<versionCode>/app-release.apk` and
+`releases/<versionCode>/app-<abi>.apk` for `arm64-v8a`, `armeabi-v7a`, and
+`x86_64`, plus
 `releases/<versionCode>/manifest.json`, then updates
 `releases/latest.json`.
-The manifest contains `versionCode`, `sha256`, `apkObjectPath`, `versionName`,
-`packageName`, and `releaseNotes`.
+The manifest contains the release metadata and an `apkVariants` array with an
+ABI, SHA-256 checksum, and object path for each APK.
 
 The owner has applied the private-bucket migration and deployed
 `app-update-check` v1. The bucket remains empty until a signed release workflow
@@ -169,15 +170,20 @@ keystore, not a dedicated production key; changing signing keys later prevents
 in-place updates without reinstalling the app.
 
 The app calls the `app-update-check` Edge Function with its installed
-`versionCode` and package name. The function reads the private
-`releases/latest.json`, compares package/version, creates a five-minute signed
-URL for exactly the manifest's `apkObjectPath`, and returns `updateAvailable`
-plus the manifest fields and `downloadUrl`. The mobile app uses only the
+`versionCode`, package name, and `Build.SUPPORTED_ABIS` in Android preference
+order. The function reads the private `releases/latest.json`, compares
+package/version, selects the first matching ABI variant, creates a five-minute
+signed URL for exactly that variant's `apkObjectPath`, and returns
+`updateAvailable`, the selected ABI/checksum/path, and `downloadUrl`. A device
+without a matching ABI receives an explicit error rather than an incompatible
+APK. The mobile app uses only the
 existing Supabase publishable key; it has no service-role credential. Function
 source, `verify_jwt = false` configuration, and private-bucket migration are
 included in this repository. The deployed v1 function was checked against the
-same bucket, manifest path, and response contract. The bucket is currently
-empty; this work has not uploaded an APK or manifest.
+previous universal-APK manifest contract. Before the first per-ABI release,
+deploy the updated function so it understands the `apkVariants` manifest and
+`supportedAbis` request. The bucket is currently empty; no APK or manifest has
+been uploaded.
 
 Because this app has no user sign-in, `app-update-check` must be callable
 anonymously (for example with Edge Function JWT verification disabled). Keep

@@ -37,18 +37,24 @@ class SupabaseAppUpdateService implements AppUpdateService {
     final installed = await _channel.invokeMapMethod<String, dynamic>(
       'getAppVersion',
     );
+    final supportedAbisValue = installed?['supportedAbis'];
     if (installed == null ||
         installed['packageName'] != _packageName ||
-        installed['versionCode'] is! int) {
+        installed['versionCode'] is! int ||
+        supportedAbisValue is! List ||
+        supportedAbisValue.isEmpty ||
+        supportedAbisValue.any((abi) => abi is! String || abi.isEmpty)) {
       throw StateError('Unable to read the installed Android app version.');
     }
 
     final installedVersionCode = installed['versionCode'] as int;
+    final supportedAbis = List<String>.from(supportedAbisValue);
     final response = await client.functions.invoke(
       'app-update-check',
       body: {
         'versionCode': installedVersionCode,
         'packageName': _packageName,
+        'supportedAbis': supportedAbis,
       },
     );
     if (response.status < 200 || response.status >= 300) {
@@ -84,7 +90,8 @@ class SupabaseAppUpdateService implements AppUpdateService {
     );
     await updateDirectory.create(recursive: true);
     final apkFile = File(
-      '${updateDirectory.path}${Platform.pathSeparator}release-${release.versionCode}.apk',
+      '${updateDirectory.path}${Platform.pathSeparator}'
+      'release-${release.versionCode}-${release.abi}.apk',
     );
 
     try {
