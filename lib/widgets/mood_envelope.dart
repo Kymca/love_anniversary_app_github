@@ -15,9 +15,14 @@ int moodEnvelopeFaceFrameIndex(Duration elapsed) =>
     moodEnvelopeFaceFrameCount;
 
 class MoodIncomingEnvelope extends StatefulWidget {
-  const MoodIncomingEnvelope({super.key, required this.mood});
+  const MoodIncomingEnvelope({
+    super.key,
+    required this.mood,
+    this.size = const Size(96, 96),
+  });
 
-  final DailyMood mood;
+  final DailyMood? mood;
+  final Size size;
 
   @override
   State<MoodIncomingEnvelope> createState() => _MoodIncomingEnvelopeState();
@@ -87,69 +92,81 @@ class _MoodIncomingEnvelopeState extends State<MoodIncomingEnvelope>
   @override
   Widget build(BuildContext context) {
     final strings = AppLocalizations.of(context)!;
-    final moodName = _moodLabel(strings, widget.mood);
-    final label = _isOpen
-        ? strings.duckMoodEnvelopeOpen(moodName)
+    final mood = widget.mood;
+    final label = mood == null
+        ? strings.duckMoodEnvelopeUnavailable
+        : _isOpen
+        ? strings.duckMoodEnvelopeOpen(_moodLabel(strings, mood))
         : strings.duckMoodEnvelopeClosed;
     final frame = _frame;
     final faceFrame = _faceFrame;
     return Semantics(
-      button: true,
+      button: mood != null,
+      enabled: mood != null,
       label: label,
       child: Tooltip(
         message: label,
         child: GestureDetector(
           key: const ValueKey('incoming-mood-envelope'),
-          onTap: _toggle,
+          onTap: mood == null ? null : _toggle,
           child: SizedBox(
             key: ValueKey('incoming-mood-envelope-frame-$frame'),
-            width: 96,
-            height: 96,
+            width: widget.size.width,
+            height: widget.size.height,
             child: Stack(
               children: [
                 SizedBox(
-                  width: 96,
-                  height: 96,
+                  width: widget.size.width,
+                  height: widget.size.height,
                   child: ClipRect(
                     child: OverflowBox(
                       alignment: Alignment.centerLeft,
-                      maxWidth: 96.0 * _frameCount,
-                      maxHeight: 96,
+                      maxWidth: widget.size.width * _frameCount,
+                      maxHeight: widget.size.height,
                       child: Transform.translate(
-                        offset: Offset(-96.0 * frame, 0),
+                        offset: Offset(-widget.size.width * frame, 0),
                         child: Image.asset(
                           'assets/images/mood_envelopes/envelope_opening_sheet.png',
-                          width: 96.0 * _frameCount,
-                          height: 96,
+                          width: widget.size.width * _frameCount,
+                          height: widget.size.height,
                           filterQuality: FilterQuality.none,
                         ),
                       ),
                     ),
                   ),
                 ),
-                if (_frame >= 8)
+                if (_frame >= 8 && mood != null)
                   Positioned(
-                    left: 30,
-                    top: 7,
+                    left: widget.size.width * 0.3125,
+                    top: widget.size.height * 0.0729,
                     child: SizedBox(
                       key: const ValueKey('mood-envelope-face'),
-                      width: 36,
-                      height: 36,
+                      width: widget.size.width * 0.375,
+                      height: widget.size.height * 0.375,
                       child: ClipRect(
                         child: OverflowBox(
                           alignment: Alignment.centerLeft,
-                          maxWidth: 36.0 * moodEnvelopeFaceFrameCount,
-                          maxHeight: 36,
+                          maxWidth:
+                              widget.size.width *
+                              0.375 *
+                              moodEnvelopeFaceFrameCount,
+                          maxHeight: widget.size.height * 0.375,
                           child: Transform.translate(
                             key: ValueKey(
                               'mood-envelope-face-frame-$faceFrame',
                             ),
-                            offset: Offset(-36.0 * faceFrame, 0),
+                            offset: Offset(
+                              -widget.size.width * 0.375 * faceFrame,
+                              0,
+                            ),
                             child: Image.asset(
                               'assets/images/mood_envelopes/'
-                              '${widget.mood.name}_loop.png',
-                              width: 36.0 * moodEnvelopeFaceFrameCount,
-                              height: 36,
+                              '${mood.name}_loop.png',
+                              width:
+                                  widget.size.width *
+                                  0.375 *
+                                  moodEnvelopeFaceFrameCount,
+                              height: widget.size.height * 0.375,
                               filterQuality: FilterQuality.none,
                             ),
                           ),

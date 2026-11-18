@@ -1102,23 +1102,18 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                                         ),
                                     ],
                                   )
-                                : _partnerMood == null
-                                ? const SizedBox(
-                                    key: ValueKey('partner-duck-not-owned'),
-                                    width: 240,
-                                    height: 205,
-                                  )
                                 : SizedBox(
+                                    key: const ValueKey(
+                                      'partner-mood-envelope-stage',
+                                    ),
                                     width: 240,
                                     height: 205,
-                                    child: Align(
-                                      alignment: Alignment.bottomRight,
-                                      child: MoodIncomingEnvelope(
-                                        key: ValueKey(
-                                          'incoming-mood-${_partnerMood!.name}',
-                                        ),
-                                        mood: _partnerMood!,
+                                    child: MoodIncomingEnvelope(
+                                      key: ValueKey(
+                                        'incoming-mood-${_partnerMood?.name ?? 'unavailable'}',
                                       ),
+                                      mood: _partnerMood,
+                                      size: const Size(240, 205),
                                     ),
                                   ),
                           ),

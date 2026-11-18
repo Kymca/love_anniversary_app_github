@@ -70,6 +70,12 @@ void main() {
     expect(nextFaceFrame, isNot(firstFaceFrame));
     await tester.pump(const Duration(seconds: 2));
     expect(faceFrameKey(), nextFaceFrame);
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey('incoming-mood-envelope-frame-17')),
+      ),
+      const Size(96, 96),
+    );
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(app(DailyMood.angry));
@@ -101,6 +107,63 @@ void main() {
       await tester.pump(const Duration(milliseconds: 34));
     }
     expect(find.byKey(const ValueKey('mood-envelope-face')), findsNothing);
+    expect(find.byKey(const ValueKey('incoming-mood-envelope')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('envelope remains in its full character area without a mood', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Scaffold(
+          body: MoodIncomingEnvelope(
+            mood: null,
+            size: const Size(240, 205),
+          ),
+        ),
+      ),
+    );
+
+    final envelope = find.byKey(
+      const ValueKey('incoming-mood-envelope-frame-0'),
+    );
+    expect(tester.getSize(envelope), const Size(240, 205));
+    expect(
+      find.image(
+        const AssetImage(
+          'assets/images/mood_envelopes/envelope_opening_sheet.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byTooltip('Настроение партнёра пока не получено.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mood face scales with the envelope display area', (tester) async {
+    await tester.pumpWidget(
+      localizedTestApp(
+        home: Scaffold(
+          body: MoodIncomingEnvelope(
+            mood: DailyMood.blue,
+            size: const Size(240, 205),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('incoming-mood-envelope')));
+    for (var frame = 0; frame < 23; frame++) {
+      await tester.pump(const Duration(milliseconds: 34));
+    }
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('mood-envelope-face'))),
+      const Size(90, 76.875),
+    );
     expect(tester.takeException(), isNull);
   });
 }

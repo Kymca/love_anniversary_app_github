@@ -336,6 +336,7 @@
   "duckOwnedByPartnerToday": "Сьогодні качечка в учасника: {name}.",
   "@duckOwnedByPartnerToday": {"placeholders": {"name": {}}},
   "duckMoodEnvelopeClosed": "Настрій партнера. Натисніть, щоб відкрити.",
+  "duckMoodEnvelopeUnavailable": "Настрій партнера ще не отримано.",
   "duckMoodEnvelopeOpen": "Настрій партнера: {mood}",
   "@duckMoodEnvelopeOpen": {"placeholders": {"mood": {}}},
   "duckNotOwnerAction": "Сьогодні піклуватися про качечку може лише її власник.",
