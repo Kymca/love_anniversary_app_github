@@ -1062,54 +1062,65 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                           offset: Offset(0, -28 * joy * (1 - joy).abs()),
                           child: Transform.scale(
                             scale: 1 + 0.04 * joy,
-                            child: Stack(
-                              children: [
-                                DuckPartnerTransition(
-                                  side: widget.partnerSide,
-                                  child: DuckPetWidget(
-                                    key: ValueKey(widget.partnerSide),
-                                    size: const Size(240, 205),
-                                    semanticsLabel: strings.petSemantics,
-                                    onTap: _tapDuck,
-                                    appearance: _duckAppearance,
-                                    blink: _isBlinking,
-                                    joy: joy,
-                                    detailSeed: _detailSeed,
-                                    emotion: duckEmotionForMood(_partnerMood),
-                                  ),
-                                ),
-                                if (_showCouponMessage)
-                                  const Positioned(
-                                    right: 46,
-                                    bottom: 18,
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        color: Color(0xFFFFF1D9),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.all(7),
-                                        child: Icon(
-                                          Icons.mail_rounded,
-                                          size: 19,
-                                          color: Color(0xFFB58248),
+                            child: _isDuckOwner
+                                ? Stack(
+                                    children: [
+                                      DuckPartnerTransition(
+                                        side: widget.partnerSide,
+                                        child: DuckPetWidget(
+                                          key: ValueKey(widget.partnerSide),
+                                          size: const Size(240, 205),
+                                          semanticsLabel: strings.petSemantics,
+                                          onTap: _tapDuck,
+                                          appearance: _duckAppearance,
+                                          blink: _isBlinking,
+                                          joy: joy,
+                                          detailSeed: _detailSeed,
+                                          emotion: duckEmotionForMood(
+                                            _partnerMood,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                if (!_isDuckOwner && _partnerMood != null)
-                                  Positioned(
-                                    right: 34,
-                                    bottom: 10,
-                                    child: MoodIncomingEnvelope(
-                                      key: ValueKey(
-                                        'incoming-mood-${_partnerMood!.name}',
+                                      if (_showCouponMessage)
+                                        const Positioned(
+                                          right: 46,
+                                          bottom: 18,
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: Color(0xFFFFF1D9),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Padding(
+                                              padding: EdgeInsets.all(7),
+                                              child: Icon(
+                                                Icons.mail_rounded,
+                                                size: 19,
+                                                color: Color(0xFFB58248),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : _partnerMood == null
+                                ? const SizedBox(
+                                    key: ValueKey('partner-duck-not-owned'),
+                                    width: 240,
+                                    height: 205,
+                                  )
+                                : SizedBox(
+                                    width: 240,
+                                    height: 205,
+                                    child: Align(
+                                      alignment: Alignment.bottomRight,
+                                      child: MoodIncomingEnvelope(
+                                        key: ValueKey(
+                                          'incoming-mood-${_partnerMood!.name}',
+                                        ),
+                                        mood: _partnerMood!,
                                       ),
-                                      mood: _partnerMood!,
                                     ),
                                   ),
-                              ],
-                            ),
                           ),
                         ),
                       ),
@@ -1251,49 +1262,6 @@ class _TamagotchiScreenState extends State<TamagotchiScreen>
                         ),
                         const SizedBox(height: 6),
                       ],
-                      Wrap(
-                        spacing: 9,
-                        runSpacing: 9,
-                        children:
-                            [
-                                  _Food(
-                                    'crumbs',
-                                    strings.foodCrumbs,
-                                    strings.foodCrumbsSnack,
-                                  ),
-                                  _Food(
-                                    'watermelon',
-                                    strings.foodWatermelonStore,
-                                    strings.foodWatermelonStoreSnack,
-                                  ),
-                                  _Food(
-                                    'worm',
-                                    strings.foodWorm,
-                                    strings.foodWormSnack,
-                                  ),
-                                ]
-                                .map((food) {
-                                  return ActionChip(
-                                    avatar: _foodAvatar(food),
-                                    label: Text('${food.label} (0)'),
-                                    onPressed: _isDuckOwner
-                                        ? () => _feed(food)
-                                        : null,
-                                    backgroundColor: const Color(0xFFFFF8FB),
-                                    side: BorderSide(
-                                      color: AppColors.rose.withValues(
-                                        alpha: 0.13,
-                                      ),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    elevation: 2,
-                                  );
-                                })
-                                .toList(growable: false),
-                      ),
-                      const SizedBox(height: 9),
                       Wrap(
                         spacing: 9,
                         runSpacing: 9,

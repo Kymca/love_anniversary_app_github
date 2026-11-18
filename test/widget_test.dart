@@ -10,6 +10,7 @@ import 'package:love_anniversary_app/services/coupon_repository.dart';
 import 'package:love_anniversary_app/screens/secret_notes_screen.dart';
 import 'package:love_anniversary_app/screens/coupons_screen.dart';
 import 'package:love_anniversary_app/screens/tamagotchi_screen.dart';
+import 'package:love_anniversary_app/widgets/cinema_night_widget.dart';
 import 'package:love_anniversary_app/services/duck_local_notification_service.dart';
 import 'package:love_anniversary_app/services/participant_profile_repository.dart';
 import 'package:love_anniversary_app/services/pair_repository.dart';
@@ -501,6 +502,7 @@ void main() {
     expect(find.text('Капсула времени'), findsOneWidget);
     expect(find.text('Настроение вдвоём'), findsNothing);
     expect(find.text('Открыть раздел «Пары»'), findsNothing);
+    expect(find.byType(CinemaNightWidget), findsNothing);
     await tester.scrollUntilVisible(
       find.text('Открыть архив открыток'),
       250,

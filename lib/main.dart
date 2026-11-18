@@ -289,18 +289,25 @@ class _AppShellState extends State<_AppShell> {
     super.initState();
     _loadParticipantSide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_checkForAppUpdate());
+      unawaited(_checkForAppUpdateAutomatically());
     });
   }
 
-  Future<void> _checkForAppUpdate() async {
+  Future<void> _checkForAppUpdateAutomatically() async {
+    try {
+      await _checkForAppUpdate();
+    } catch (_) {
+      // The error is reported by _checkForAppUpdate.
+    }
+  }
+
+  Future<AppRelease?> _checkForAppUpdate() async {
     final service = widget.appUpdateService;
-    if (service == null) return;
+    if (service == null) return null;
     try {
       final release = await service.checkForUpdate();
-      if (mounted && release != null) {
-        setState(() => _availableUpdate = release);
-      }
+      if (mounted) setState(() => _availableUpdate = release);
+      return release;
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -310,6 +317,7 @@ class _AppShellState extends State<_AppShell> {
           context: ErrorDescription('while checking for an Android update'),
         ),
       );
+      rethrow;
     }
   }
 
@@ -503,6 +511,9 @@ class _AppShellState extends State<_AppShell> {
                       child: SettingsScreen(
                         authService: widget.pairEmailAuthService,
                         onAuthChanged: _onPairUpdated,
+                        onCheckForUpdate: widget.appUpdateService == null
+                            ? null
+                            : _checkForAppUpdate,
                       ),
                     ),
                   ],

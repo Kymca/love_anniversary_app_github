@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import '../models/app_release.dart';
 import '../services/pair_email_auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -9,10 +10,12 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.authService,
     this.onAuthChanged,
+    this.onCheckForUpdate,
   });
 
   final PairEmailAuthService? authService;
   final VoidCallback? onAuthChanged;
+  final Future<AppRelease?> Function()? onCheckForUpdate;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -23,7 +26,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _codeController = TextEditingController();
   bool _codeSent = false;
   bool _isBusy = false;
+  bool _isCheckingForUpdate = false;
   String? _error;
+  String? _updateCheckMessage;
   String? _requestedEmail;
 
   @override
@@ -147,6 +152,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _checkForUpdate() async {
+    final check = widget.onCheckForUpdate;
+    if (check == null || _isCheckingForUpdate) return;
+
+    final strings = AppLocalizations.of(context)!;
+    setState(() {
+      _isCheckingForUpdate = true;
+      _updateCheckMessage = strings.appUpdateChecking;
+    });
+    try {
+      final release = await check();
+      if (mounted) {
+        setState(
+          () => _updateCheckMessage = release == null
+              ? strings.appUpdateUpToDate
+              : strings.appUpdateAvailable(release.versionName),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _updateCheckMessage = strings.appUpdateCheckFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _isCheckingForUpdate = false);
+    }
+  }
+
   void _onEmailChanged(String value) {
     final changedEmail = value.trim().toLowerCase() != _requestedEmail;
     if (!_codeSent || !changedEmail) return;
@@ -177,6 +209,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 8),
             Text(strings.pairEmailAuthDescription),
             const SizedBox(height: 20),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      strings.appUpdateSettingsTitle,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.tonalIcon(
+                      onPressed: widget.onCheckForUpdate == null ||
+                              _isCheckingForUpdate
+                          ? null
+                          : _checkForUpdate,
+                      icon: _isCheckingForUpdate
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.system_update_alt_rounded),
+                      label: Text(strings.appUpdateCheckAction),
+                    ),
+                    if (_updateCheckMessage != null ||
+                        widget.onCheckForUpdate == null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _updateCheckMessage ??
+                            strings.appUpdateCheckUnavailable,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),

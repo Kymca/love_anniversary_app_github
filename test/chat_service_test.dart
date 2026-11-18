@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:love_anniversary_app/models/chat_export.dart';
+import 'package:love_anniversary_app/services/chat_export_storage.dart';
 import 'package:love_anniversary_app/services/chat_service.dart';
+import 'package:love_anniversary_app/services/telegram_chat_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const exportJson = '''
@@ -32,6 +36,137 @@ void main() {
     expect(export.messages[2].actor?.name, 'Alice');
     expect(export.messages[2].action, 'pin_message');
   });
+
+  test(
+    'safely flattens Telegram entities and preserves empty/service records',
+    () {
+      final export = ChatExport.decode('''
+      {
+        "name": "Synthetic chat",
+        "type": "personal_chat",
+        "id": 7,
+        "messages": [
+          {
+            "id": 1,
+            "type": "message",
+            "from": "Alice",
+            "text": ["Hello ", {"type": "bold", "text": "there"}, {"text": [" ", {"text": "friend"}]}]
+          },
+          {
+            "id": 2,
+            "type": "message",
+            "from": "Bob",
+            "text": "",
+            "text_entities": ["Fallback text"]
+          },
+          {
+            "id": 3,
+            "type": "message",
+            "from": "Alice",
+            "text": ""
+          },
+          {
+            "id": 4,
+            "type": "service",
+            "actor": "Bob",
+            "action": "pin_message",
+            "text": "pinned"
+          }
+        ]
+      }
+    ''');
+
+      expect(export.messages.map((message) => message.text), [
+        'Hello there friend',
+        'Fallback text',
+        '',
+        'pinned',
+      ]);
+      expect(export.messages.last.isService, isTrue);
+      expect(export.messages.last.actor?.name, 'Bob');
+    },
+  );
+
+  test(
+    'selects a balanced quote from synthetic Telegram export records',
+    () async {
+      final source = jsonEncode({
+        'name': 'Synthetic couple chat',
+        'type': 'personal_chat',
+        'id': 42,
+        'messages': [
+          for (var index = 0; index < 6; index++)
+            {
+              'id': index + 1,
+              'type': 'message',
+              'date_unixtime': '${1697130835 + index * 60}',
+              'from': index.isEven ? 'Alice' : 'Bob',
+              'from_id': index.isEven ? 'user1' : 'user2',
+              'text': index == 3
+                  ? [
+                      'Friendly ',
+                      {'type': 'bold', 'text': 'message 3'},
+                    ]
+                  : 'Friendly message $index',
+            },
+        ],
+      });
+      final service = TelegramChatService(
+        bundle: _StringAssetBundle(source),
+        random: Random(0),
+      );
+
+      final quote = await service.getRandomSnippet();
+
+      expect(quote.messages, hasLength(6));
+      expect(quote.messages[3].text, 'Friendly message 3');
+      expect(quote.messages.map((message) => message.author).toSet(), {
+        'Alice',
+        'Bob',
+      });
+    },
+  );
+
+  test(
+    'imports and parses a synthetic export from local-only storage',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final storage = _MemoryChatExportStorage();
+      final service = TelegramChatService(
+        preferences: preferences,
+        localExportStorage: storage,
+      );
+      final source = jsonEncode({
+        'name': 'Synthetic local chat',
+        'type': 'personal_chat',
+        'messages': [
+          for (var index = 0; index < 6; index++)
+            {
+              'id': index + 1,
+              'type': 'message',
+              'date_unixtime': '${1697130835 + index * 60}',
+              'from': index.isEven ? 'Alice' : 'Bob',
+              'from_id': index.isEven ? 'user1' : 'user2',
+              'text': 'Local synthetic message $index',
+            },
+        ],
+      });
+
+      await service.importLocalExport(Stream.value(utf8.encode(source)));
+
+      expect(storage.source, source);
+      expect(
+        (await service.getRandomSnippet()).messages.first.text,
+        startsWith('Local synthetic message'),
+      );
+      await expectLater(
+        service.importLocalExport(Stream.value(utf8.encode('not JSON'))),
+        throwsA(isA<FormatException>()),
+      );
+      expect(storage.source, source);
+    },
+  );
 
   test(
     'service loads once and provides dates and participant counts',
@@ -69,5 +204,23 @@ class _StringAssetBundle extends CachingAssetBundle {
     loadCount++;
     final bytes = utf8.encode(source);
     return ByteData.sublistView(Uint8List.fromList(bytes));
+  }
+}
+
+class _MemoryChatExportStorage implements ChatExportStorage {
+  String? source;
+
+  @override
+  Future<String?> read() async => source;
+
+  @override
+  Future<ChatExport> importExport(
+    Stream<List<int>> bytes,
+    Future<ChatExport> Function(String source) decode,
+  ) async {
+    final incoming = await utf8.decoder.bind(bytes).join();
+    final export = await decode(incoming);
+    source = incoming;
+    return export;
   }
 }

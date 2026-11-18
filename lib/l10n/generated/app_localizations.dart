@@ -140,6 +140,48 @@ abstract class AppLocalizations {
   /// **'Не удалось загрузить обновление. Попробуйте позже.'**
   String get appUpdateFailed;
 
+  /// No description provided for @appUpdateSettingsTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Обновление приложения'**
+  String get appUpdateSettingsTitle;
+
+  /// No description provided for @appUpdateCheckAction.
+  ///
+  /// In ru, this message translates to:
+  /// **'Проверить обновления'**
+  String get appUpdateCheckAction;
+
+  /// No description provided for @appUpdateChecking.
+  ///
+  /// In ru, this message translates to:
+  /// **'Проверяем обновления…'**
+  String get appUpdateChecking;
+
+  /// No description provided for @appUpdateAvailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Доступно обновление {version}'**
+  String appUpdateAvailable(Object version);
+
+  /// No description provided for @appUpdateUpToDate.
+  ///
+  /// In ru, this message translates to:
+  /// **'У вас установлена последняя версия.'**
+  String get appUpdateUpToDate;
+
+  /// No description provided for @appUpdateCheckFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось проверить обновления. Попробуйте позже.'**
+  String get appUpdateCheckFailed;
+
+  /// No description provided for @appUpdateCheckUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Проверка обновлений сейчас недоступна.'**
+  String get appUpdateCheckUnavailable;
+
   /// No description provided for @homeTab.
   ///
   /// In ru, this message translates to:
@@ -1231,6 +1273,24 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Кря-цитата дня'**
   String get dailyQuoteTitle;
+
+  /// No description provided for @importTelegramExport.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбрать экспорт Telegram JSON'**
+  String get importTelegramExport;
+
+  /// No description provided for @telegramExportUnavailable.
+  ///
+  /// In ru, this message translates to:
+  /// **'Добавьте локальный экспорт переписки Telegram.'**
+  String get telegramExportUnavailable;
+
+  /// No description provided for @telegramExportImportError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось прочитать файл. Выберите экспорт Telegram JSON.'**
+  String get telegramExportImportError;
 
   /// No description provided for @removeFavorite.
   ///
@@ -2479,6 +2539,12 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Крутить ещё'**
   String get rouletteSpinAgain;
+
+  /// No description provided for @rouletteSpinInProgress.
+  ///
+  /// In ru, this message translates to:
+  /// **'Рулетка уже вращается у вас или партнёра.'**
+  String get rouletteSpinInProgress;
 
   /// No description provided for @rouletteResult.
   ///

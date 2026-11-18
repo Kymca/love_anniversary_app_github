@@ -319,15 +319,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.textContaining('Саша'), findsAtLeastNWidgets(1));
-    DuckSpriteSheetPainter currentDuckPainter() => tester
-        .widgetList<CustomPaint>(
-          find.byKey(const ValueKey('pixel-duck-animation')),
-        )
-        .map((paint) => paint.painter! as DuckSpriteSheetPainter)
-        .last;
-
-    var painter = currentDuckPainter();
-    expect(painter.emotion, DuckEmotion.joyful);
+    expect(find.byType(DuckPetWidget), findsNothing);
+    expect(
+      find.byKey(const ValueKey('incoming-mood-envelope')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('incoming-mood-joyful')), findsOneWidget);
 
     await profileRepository.saveCurrentSide('second');
     await preferences.setString(
@@ -344,8 +341,12 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    painter = currentDuckPainter();
-    expect(painter.emotion, DuckEmotion.angry);
+    expect(find.byType(DuckPetWidget), findsNothing);
+    expect(find.byKey(const ValueKey('incoming-mood-angry')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('incoming-mood-envelope')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -383,6 +384,7 @@ void main() {
         find.byKey(const ValueKey('incoming-mood-envelope')),
         findsNothing,
       );
+      expect(find.byType(DuckPetWidget), findsNothing);
 
       await profiles.saveCurrentSide('first');
       await moods.record('first', DailyMood.angry, date: DateTime.now());
@@ -390,6 +392,7 @@ void main() {
       await tester.pump(const Duration(minutes: 1));
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byKey(const ValueKey('incoming-mood-angry')), findsOneWidget);
+      expect(find.byType(DuckPetWidget), findsNothing);
 
       final feedActions = find.byType(ActionChip);
       expect(feedActions, findsWidgets);
@@ -714,9 +717,9 @@ void main() {
     expect(find.byKey(const ValueKey('pixel-duck-sprite')), findsOneWidget);
     expect(find.text('Магазин костюмов для Кряква'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Крошки (0)'));
+    await tester.ensureVisible(find.text('Крошки ×0'));
     await tester.pump();
-    await tester.tap(find.text('Крошки (0)'));
+    await tester.tap(find.text('Крошки ×0'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -877,6 +880,14 @@ void main() {
         reason: '$productId should use its pixel product sprite.',
       );
     }
+    expect(find.text('Крошки ×1'), findsOneWidget);
+    expect(find.text('Крошки (0)'), findsNothing);
+    await tester.ensureVisible(find.text('Арбуз ×1'));
+    await tester.pump();
+    expect(find.text('Арбуз ×1'), findsOneWidget);
+    await tester.ensureVisible(find.text('Червячки ×1'));
+    await tester.pump();
+    expect(find.text('Червячки ×1'), findsOneWidget);
 
     for (final productId in ['crumbs', 'watermelon', 'pizza']) {
       final images = tester.widgetList<Image>(
@@ -894,8 +905,8 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('pixel-worm-jar-painter')),
-      findsNWidgets(2),
-      reason: 'Worms must stay in the jar in both feed and inventory chips.',
+      findsOneWidget,
+      reason: 'Worms must stay in the jar in the single inventory chip.',
     );
     expect(tester.takeException(), isNull);
   });
@@ -929,14 +940,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    await tapFood('Крошки (0)');
-    await tapFood('Крошки (0)');
+    await tapFood('Крошки ×0');
+    await tapFood('Крошки ×0');
     expect(preferences.getStringList('tamagotchi_recent_food_ids'), [
       'crumbs',
       'crumbs',
     ]);
 
-    await tapFood('Крошки (0)');
+    await tapFood('Крошки ×0');
     expect(find.byKey(const ValueKey('feed-variety-warning')), findsOneWidget);
     expect(preferences.getStringList('tamagotchi_recent_food_ids'), [
       'crumbs',
@@ -946,15 +957,15 @@ void main() {
     await tester.pumpWidget(localizedTestApp(home: const TamagotchiScreen()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    await tapFood('Крошки (0)');
+    await tapFood('Крошки ×0');
     expect(find.byKey(const ValueKey('feed-variety-warning')), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
-    await tapFood('Червячок (0)');
+    await tapFood('Червячки ×0');
     expect(preferences.getStringList('tamagotchi_recent_food_ids'), [
       'crumbs',
       'worm',
     ]);
-    await tapFood('Крошки (0)');
+    await tapFood('Крошки ×0');
     expect(preferences.getStringList('tamagotchi_recent_food_ids'), [
       'worm',
       'crumbs',

@@ -8,7 +8,6 @@ import '../services/postcard_push_gateway.dart';
 import '../theme/app_theme.dart';
 import 'postcards_screen.dart';
 import '../widgets/countdown_widget.dart';
-import '../widgets/cinema_night_widget.dart';
 import '../widgets/mood_calendar_widget.dart';
 import '../widgets/time_capsule_widget.dart';
 
@@ -56,8 +55,6 @@ class SecretNotesScreen extends StatelessWidget {
               pairRepository: pairRepository,
               isActive: isActive,
             ),
-            const SizedBox(height: 20),
-            const CinemaNightWidget(),
             const SizedBox(height: 20),
             GlassCard(
               padding: const EdgeInsets.all(18),

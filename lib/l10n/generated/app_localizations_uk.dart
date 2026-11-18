@@ -33,6 +33,31 @@ class AppLocalizationsUk extends AppLocalizations {
       'Не вдалося завантажити оновлення. Спробуйте пізніше.';
 
   @override
+  String get appUpdateSettingsTitle => 'Оновлення застосунку';
+
+  @override
+  String get appUpdateCheckAction => 'Перевірити оновлення';
+
+  @override
+  String get appUpdateChecking => 'Перевіряємо оновлення…';
+
+  @override
+  String appUpdateAvailable(Object version) {
+    return 'Доступне оновлення $version';
+  }
+
+  @override
+  String get appUpdateUpToDate => 'У вас встановлена остання версія.';
+
+  @override
+  String get appUpdateCheckFailed =>
+      'Не вдалося перевірити оновлення. Спробуйте пізніше.';
+
+  @override
+  String get appUpdateCheckUnavailable =>
+      'Перевірка оновлень зараз недоступна.';
+
+  @override
   String get homeTab => 'Наша історія';
 
   @override
@@ -723,6 +748,17 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get dailyQuoteTitle => 'Кря-цитата дня';
+
+  @override
+  String get importTelegramExport => 'Вибрати експорт Telegram JSON';
+
+  @override
+  String get telegramExportUnavailable =>
+      'Додайте локальний експорт листування Telegram.';
+
+  @override
+  String get telegramExportImportError =>
+      'Не вдалося прочитати файл. Виберіть експорт Telegram JSON.';
 
   @override
   String get removeFavorite => 'Прибрати з обраного';
@@ -1461,6 +1497,10 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get rouletteSpinAgain => 'Крутити ще';
+
+  @override
+  String get rouletteSpinInProgress =>
+      'Рулетка вже обертається у вас або партнера.';
 
   @override
   String get rouletteResult => 'Сьогодні обираємо:';

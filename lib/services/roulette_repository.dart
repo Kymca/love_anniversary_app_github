@@ -4,6 +4,55 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum RouletteCategory { food, movie, activity }
 
+class RouletteSpin {
+  const RouletteSpin({
+    required this.id,
+    required this.category,
+    required this.choiceKey,
+    required this.choice,
+    required this.startedAt,
+  });
+
+  final String id;
+  final RouletteCategory category;
+  final String choiceKey;
+  final String choice;
+  final DateTime startedAt;
+
+  factory RouletteSpin.fromJson(Map<String, dynamic> json) {
+    final id = json['spin_id'];
+    final categoryName = json['category'];
+    final choiceKey = json['choice_key'];
+    final choice = json['choice'];
+    final startedAt = json['started_at'];
+    RouletteCategory? category;
+    for (final value in RouletteCategory.values) {
+      if (value.name == categoryName) {
+        category = value;
+        break;
+      }
+    }
+    if (id is! String ||
+        category == null ||
+        choiceKey is! String ||
+        choice is! String ||
+        startedAt is! String) {
+      throw const FormatException('Backend returned an invalid roulette spin.');
+    }
+    final parsedStartedAt = DateTime.tryParse(startedAt);
+    if (parsedStartedAt == null) {
+      throw const FormatException('Backend returned an invalid roulette spin.');
+    }
+    return RouletteSpin(
+      id: id,
+      category: category,
+      choiceKey: choiceKey,
+      choice: choice,
+      startedAt: parsedStartedAt.toUtc(),
+    );
+  }
+}
+
 abstract interface class RouletteRepository {
   Future<List<String>> loadSharedChoices(RouletteCategory category);
   Future<List<String>> loadCustomChoices(RouletteCategory category);
@@ -16,6 +65,12 @@ abstract interface class RouletteRepository {
     String choiceKey,
   );
   Stream<void> watchChanges(RouletteCategory category);
+  Future<RouletteSpin?> startSpin(
+    RouletteCategory category,
+    String choice,
+    String choiceKey,
+  );
+  Stream<RouletteSpin> watchSpins();
 }
 
 class SharedPreferencesRouletteRepository implements RouletteRepository {
@@ -27,6 +82,7 @@ class SharedPreferencesRouletteRepository implements RouletteRepository {
   static const _keyPrefix = 'date_roulette_custom_v1_';
   static const _inactiveKeyPrefix = 'date_roulette_inactive_v1_';
   static const _exclusionsKeyPrefix = 'date_roulette_exclusions_v1_';
+  static var _localSpinSequence = 0;
 
   final SharedPreferences? preferences;
   final DateTime Function() _clock;
@@ -171,6 +227,25 @@ class SharedPreferencesRouletteRepository implements RouletteRepository {
 
   @override
   Stream<void> watchChanges(RouletteCategory category) => const Stream.empty();
+
+  @override
+  Future<RouletteSpin?> startSpin(
+    RouletteCategory category,
+    String choice,
+    String choiceKey,
+  ) async {
+    final now = _clock().toUtc();
+    return RouletteSpin(
+      id: 'local-${now.microsecondsSinceEpoch}-${_localSpinSequence++}',
+      category: category,
+      choiceKey: choiceKey,
+      choice: choice,
+      startedAt: now,
+    );
+  }
+
+  @override
+  Stream<RouletteSpin> watchSpins() => const Stream.empty();
 
   static String customChoiceKey(String choice) =>
       'custom:${choice.trim().toLowerCase()}';

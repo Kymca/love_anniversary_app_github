@@ -27,7 +27,7 @@ class TextEntity {
     if (json is Map) {
       final map = Map<String, dynamic>.from(json);
       return TextEntity(
-        text: map['text']?.toString() ?? '',
+        text: _flattenText(map['text']),
         type: map['type']?.toString(),
         extraFields: Map.unmodifiable(
           Map<String, dynamic>.from(map)
@@ -37,6 +37,17 @@ class TextEntity {
       );
     }
     return const TextEntity(text: '');
+  }
+
+  static String _flattenText(Object? value) {
+    if (value is String) return value;
+    if (value is List) {
+      return value.map(_flattenText).join();
+    }
+    if (value is Map) {
+      return _flattenText(value['text']);
+    }
+    return '';
   }
 }
 
@@ -78,10 +89,15 @@ class Message {
         ? DateTime.fromMillisecondsSinceEpoch(dateUnixtime * 1000, isUtc: true)
         : (dateValue == null ? null : DateTime.tryParse(dateValue));
     final rawText = json['text'];
-    final textEntities = rawText is List
-        ? rawText.map(TextEntity.fromJson).toList(growable: false)
+    final rawEntities = rawText is List
+        ? rawText
+        : (rawText is String && rawText.isNotEmpty
+              ? const []
+              : json['text_entities']);
+    final textEntities = rawEntities is List
+        ? rawEntities.map(TextEntity.fromJson).toList(growable: false)
         : <TextEntity>[];
-    final text = rawText is String
+    final text = rawText is String && rawText.isNotEmpty
         ? rawText
         : textEntities.map((entity) => entity.text).join();
 
@@ -96,6 +112,7 @@ class Message {
       'actor_id',
       'action',
       'text',
+      'text_entities',
     };
     final extraFields = Map<String, dynamic>.from(json)
       ..removeWhere((key, _) => knownFields.contains(key));

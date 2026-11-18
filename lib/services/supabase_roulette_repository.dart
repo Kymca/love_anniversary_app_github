@@ -53,24 +53,41 @@ class SupabaseRouletteRepository implements RouletteRepository {
   Future<List<String>> loadExcludedChoiceKeys(RouletteCategory category) async {
     final id = await _pairId();
     if (id == null) return const [];
-    final rows = await client.rpc(
-      'get_pair_roulette_exclusions',
-      params: {'p_pair_id': id, 'p_category': category.name},
-    );
-    if (rows is! List) {
-      throw const FormatException(
-        'Backend returned invalid roulette exclusions.',
-      );
-    }
+    // The deployed RPC has ambiguous output-column names in its update filter.
+    final rows = await client
+        .from('pair_roulette_exclusions')
+        .select('choice_key, watched, excluded_until')
+        .eq('pair_id', id)
+        .eq('category', category.name);
+    final now = DateTime.now().toUtc();
     return List.unmodifiable(
       rows.map((row) {
-        if (row is! Map || row['choice_key'] is! String) {
+        final choiceKey = row['choice_key'];
+        final watched = row['watched'];
+        final excludedUntilValue = row['excluded_until'];
+        if (choiceKey is! String ||
+            watched is! bool ||
+            (excludedUntilValue != null && excludedUntilValue is! String)) {
           throw const FormatException(
             'Backend returned an invalid roulette exclusion.',
           );
         }
-        return row['choice_key'] as String;
-      }),
+        final excludedUntil = excludedUntilValue is String
+            ? DateTime.tryParse(excludedUntilValue)?.toUtc()
+            : null;
+        final isExpiredMovie =
+            category == RouletteCategory.movie &&
+            !watched &&
+            excludedUntil != null &&
+            !excludedUntil.isAfter(now);
+        final isActiveTimedChoice =
+            category != RouletteCategory.movie &&
+            excludedUntil != null &&
+            excludedUntil.isAfter(now);
+        return watched || isExpiredMovie || isActiveTimedChoice
+            ? choiceKey
+            : null;
+      }).whereType<String>(),
     );
   }
 
@@ -125,6 +142,36 @@ class SupabaseRouletteRepository implements RouletteRepository {
   }
 
   @override
+  Future<RouletteSpin?> startSpin(
+    RouletteCategory category,
+    String choice,
+    String choiceKey,
+  ) async {
+    final pairId = await _pairId();
+    if (pairId == null) {
+      return SharedPreferencesRouletteRepository().startSpin(
+        category,
+        choice,
+        choiceKey,
+      );
+    }
+    final result = await client.rpc(
+      'start_pair_roulette_spin',
+      params: {
+        'p_pair_id': pairId,
+        'p_category': category.name,
+        'p_choice': choice,
+        'p_choice_key': choiceKey,
+      },
+    );
+    if (result == null) return null;
+    if (result is! Map) {
+      throw const FormatException('Backend returned an invalid roulette spin.');
+    }
+    return RouletteSpin.fromJson(Map<String, dynamic>.from(result));
+  }
+
+  @override
   Stream<void> watchChanges(RouletteCategory category) async* {
     final pairId = await _pairId();
     if (pairId == null) return;
@@ -153,5 +200,21 @@ class SupabaseRouletteRepository implements RouletteRepository {
         );
       };
     });
+  }
+
+  @override
+  Stream<RouletteSpin> watchSpins() async* {
+    final pairId = await _pairId();
+    if (pairId == null) return;
+    final spins = client
+        .from('pair_roulette_spins')
+        .stream(primaryKey: ['pair_id'])
+        .eq('pair_id', pairId);
+    yield* spins
+        .where((rows) => rows.isNotEmpty)
+        .map(
+          (rows) =>
+              RouletteSpin.fromJson(Map<String, dynamic>.from(rows.first)),
+        );
   }
 }

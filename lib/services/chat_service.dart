@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/chat_export.dart';
+import 'chat_export_storage.dart';
+import 'local_chat_export_storage.dart';
 
 class ChatExportUnavailableException implements Exception {
   const ChatExportUnavailableException(this.cause);
@@ -15,11 +17,18 @@ class ChatExportUnavailableException implements Exception {
 }
 
 class ChatService {
-  ChatService({AssetBundle? bundle, this.assetPath = 'result.json'})
-    : _bundle = bundle ?? rootBundle;
+  ChatService({
+    AssetBundle? bundle,
+    this.assetPath = 'result.json',
+    ChatExportStorage? localExportStorage,
+  }) : _bundle = bundle ?? rootBundle,
+       _localExportStorage =
+           localExportStorage ??
+           (bundle == null ? createLocalChatExportStorage() : null);
 
   final AssetBundle _bundle;
   final String assetPath;
+  final ChatExportStorage? _localExportStorage;
   Future<ChatExport>? _exportFuture;
 
   Future<ChatExport> loadExport() async {
@@ -37,14 +46,33 @@ class ChatService {
 
   Future<ChatExport> _loadExport() async {
     try {
-      final source = await _bundle.loadString(assetPath);
-      final decoded = source.length > 100000
-          ? await compute(_decodeExportJson, source)
-          : _decodeExportJson(source);
-      return ChatExport.fromJson(Map<String, dynamic>.from(decoded));
+      final source = await _loadSource();
+      return await _decodeSourceAsync(source);
     } on Object catch (error) {
       throw ChatExportUnavailableException(error);
     }
+  }
+
+  Future<String> _loadSource() async {
+    final localExport = await _localExportStorage?.read();
+    if (localExport != null) return localExport;
+    return _bundle.loadString(assetPath);
+  }
+
+  Future<void> importLocalExport(Stream<List<int>> bytes) async {
+    final storage = _localExportStorage;
+    if (storage == null) {
+      throw StateError('Local Telegram export storage is unavailable.');
+    }
+    final export = await storage.importExport(bytes, _decodeSourceAsync);
+    _exportFuture = Future.value(export);
+  }
+
+  Future<ChatExport> _decodeSourceAsync(String source) async {
+    final decoded = source.length > 100000
+        ? await compute(_decodeExportJson, source)
+        : _decodeExportJson(source);
+    return ChatExport.fromJson(Map<String, dynamic>.from(decoded));
   }
 
   Future<List<Message>> getMessages() async => (await loadExport()).messages;

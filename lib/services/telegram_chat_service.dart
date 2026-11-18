@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_export.dart';
 import 'chat_service.dart';
+import 'chat_export_storage.dart';
+import 'local_chat_export_storage.dart';
 
 class SnippetMessage {
   const SnippetMessage({
@@ -84,13 +86,19 @@ class NoEligibleMemoryException implements Exception {
 }
 
 class TelegramChatService {
-  /// An optional local Telegram export can be bundled as `result.json`.
   TelegramChatService({
     AssetBundle? bundle,
     this.preferences,
     Random? random,
     this.assetPath = 'result.json',
-  }) : _chatService = ChatService(bundle: bundle, assetPath: assetPath),
+    ChatExportStorage? localExportStorage,
+  }) : _chatService = ChatService(
+         bundle: bundle,
+         assetPath: assetPath,
+         localExportStorage:
+             localExportStorage ??
+             (bundle == null ? createLocalChatExportStorage() : null),
+       ),
        _random = random ?? Random();
 
   static const favoritesKey = 'telegram_chat_favorites';
@@ -115,6 +123,12 @@ class TelegramChatService {
   final Random _random;
   final String assetPath;
   Future<SharedPreferences>? _preferencesFuture;
+
+  Future<void> importLocalExport(Stream<List<int>> bytes) async {
+    await _chatService.importLocalExport(bytes);
+    final preferences = await _getPreferences();
+    await preferences.remove(dailySnippetKey);
+  }
 
   Future<ChatSnippet> getRandomSnippet({int contextCount = 3}) async {
     final export = await _chatService.loadExport();

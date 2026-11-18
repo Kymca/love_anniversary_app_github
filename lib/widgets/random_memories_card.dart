@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/generated/app_localizations.dart';
@@ -62,7 +63,7 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
       setState(() {
         _snippet = null;
         _isFavorite = false;
-        _errorMessage = null;
+        _errorMessage = AppLocalizations.of(context)!.telegramExportUnavailable;
         _isLoading = false;
       });
     } on Object catch (error, stackTrace) {
@@ -80,6 +81,34 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
           library: 'random memory card',
         ),
       );
+    }
+  }
+
+  Future<void> _importLocalExport() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      if (file == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      await _service.importLocalExport(file.readAsByteStream());
+      if (mounted) await _loadSnippet();
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _snippet = null;
+        _isFavorite = false;
+        _errorMessage = AppLocalizations.of(context)!.telegramExportImportError;
+        _isLoading = false;
+      });
     }
   }
 
@@ -162,7 +191,7 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
             switchOutCurve: Curves.easeIn,
             child: _buildContent(),
           ),
-          if (_errorMessage != null) ...[
+          if (_snippet != null && _errorMessage != null) ...[
             const SizedBox(height: 10),
             Text(
               _errorMessage!,
@@ -209,7 +238,23 @@ class _RandomMemoriesCardState extends State<RandomMemoriesCard> {
       return Padding(
         key: ValueKey('memory-empty'),
         padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(strings.noSuitableMemory),
+        child: Column(
+          children: [
+            Text(
+              _errorMessage ?? strings.noSuitableMemory,
+              key: _errorMessage == null
+                  ? null
+                  : const ValueKey('memory-error'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const ValueKey('import-telegram-export'),
+              onPressed: _isLoading ? null : _importLocalExport,
+              icon: const Icon(Icons.upload_file_rounded),
+              label: Text(strings.importTelegramExport),
+            ),
+          ],
+        ),
       );
     }
     return ConstrainedBox(
